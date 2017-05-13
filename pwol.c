@@ -69,9 +69,12 @@
 #define SECRET_MAX_SIZE         64
 
 
+#ifndef VERSION
+#define VERSION __DATE__ __TIME__
+#endif
 
 char *argv0 = "pwol";
-char *version = "1.1";
+char *version = VERSION;
 
 
 #if 0
@@ -81,9 +84,6 @@ char *version = "1.1";
 #endif
 
 
-int ipv4_fd = -1;
-int ipv6_fd = -1;
-
 
 typedef struct secret {
   unsigned char buf[SECRET_MAX_SIZE];
@@ -92,16 +92,26 @@ typedef struct secret {
 
 
 
+typedef struct target {
+  struct addrinfo *aip;
+  int fd;
+
+  struct target *next;
+} TARGET;
+
+
 typedef struct gateway {
   char *name;
 
   char *address;
   char *port;
-  struct addrinfo *dest;
+  TARGET *targets;
 
   unsigned int copies;
   struct timespec delay;
   SECRET secret;
+
+  int fd;
 
   struct gateway *next;
 } GATEWAY;
@@ -137,13 +147,12 @@ typedef struct hostgroup {
 } HOSTGROUP;
 
 HOSTGROUP *hostgroups = NULL;
-
+HOSTGROUP *all_group = NULL;
 
 int f_verbose = 0;
 int f_ignore = 0;
 int f_debug = 0;
 int f_broadcast = 0;
-int f_all = 0;
 
 char *f_copies  = NULL;
 char *f_delay   = NULL;
@@ -187,6 +196,61 @@ strdupcat(const char *str,
   }
   va_end(ap);
   return res;
+}
+
+
+TARGET *
+target_add(TARGET **targets, 
+	   struct addrinfo *aip) {
+  TARGET *tp = malloc(sizeof(*tp));
+  
+  if (!tp)
+    return NULL;
+
+  tp->aip = aip;
+  tp->fd = -1;
+
+  tp->next = *targets;
+  *targets = tp;
+
+  return tp;
+}
+
+void
+target_free(TARGET *tp) {
+  if (!tp)
+    return;
+
+  if (tp->next) {
+    target_free(tp->next);
+    tp->next = NULL;
+  }
+
+  if (tp->aip) {
+    freeaddrinfo(tp->aip);
+    tp->aip = NULL;
+  }
+
+  free(tp);
+}
+
+
+char *
+target2str(TARGET *tp) {
+  char addr[2048];
+  char port[256];
+
+
+  if (!tp || !tp->aip)
+    return NULL;
+
+  if (getnameinfo(tp->aip->ai_addr, tp->aip->ai_addrlen, addr, sizeof(addr), port, sizeof(port), NI_DGRAM|NI_NUMERICHOST|NI_NUMERICSERV) != 0)
+    return NULL;
+
+  if (tp->aip->ai_family == AF_INET6)
+    return strdupcat("[", addr, "]:", port, NULL);
+
+  return strdupcat(addr, ":", port, NULL);
 }
 
 
@@ -349,26 +413,11 @@ gw_lookup(const char *name) {
 int
 gw_add_address(GATEWAY *gp,
 	       const char *address) {
-  struct addrinfo hints;
-  int rc;
-
   if (!address)
     return -1;
 
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_socktype = SOCK_DGRAM;
-
   gp->address = strdup(address);
-
-  if (gp->dest) {
-    freeaddrinfo(gp->dest);
-    gp->dest = NULL;
-  }
-    
-  if ((rc = getaddrinfo(address, gp->port ? gp->port : DEFAULT_SERVICE, &hints, &gp->dest)) == 0)
-    return 0;
-  
-  return -rc;
+  return 0;
 }
 
 
@@ -395,7 +444,7 @@ gw_create(const char *name) {
   if (default_gp) {
     gp->address = default_gp->address;
     gp->port    = default_gp->port;
-    gp->dest    = default_gp->dest;
+    gp->targets = default_gp->targets;
 
     gp->copies  = default_gp->copies;
     gp->delay   = default_gp->delay;
@@ -413,27 +462,11 @@ gw_create(const char *name) {
 int
 gw_add_port(GATEWAY *gp,
 	    const char *port) {
-  struct addrinfo hints;
-  int rc;
-
-
   if (!port)
     return -1;
 
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_socktype = SOCK_DGRAM;
-
-  if (gp->dest) {
-    freeaddrinfo(gp->dest);
-    gp->dest = NULL;
-  }
-    
   gp->port = strdup(port);
-
-  if ((rc = getaddrinfo(gp->address ? gp->address : DEFAULT_ADDRESS, port, &hints, &gp->dest)) == 0)
-    return 0;
-
-  return -rc;
+  return 0;
 }
 
 int
@@ -638,11 +671,20 @@ group_create(const char *name) {
 int
 group_add_host(HOSTGROUP *hgp, 
 	       HOST *hp) {
+  int i;
+
+
   if (!hgp)
     return -1;
 
   if (!hp)
     return -1;
+
+  for (i = 0; i < hgp->hc && hp != hgp->hv[i]; i++)
+    ;
+
+  if (i < hgp->hc)
+    return hgp->hc;
 
   if (hgp->hc >= hgp->hs) {
     hgp->hs += DEFAULT_HOSTGROUP_HOSTS;
@@ -657,18 +699,17 @@ group_add_host(HOSTGROUP *hgp,
 
 void
 gw_print(GATEWAY *gp) {
-  struct addrinfo *aip;
-  char dest[2048];
-  char serv[256];
-  
+  TARGET *tp;
+  unsigned int i;
+
+
   printf("Gateway %s:\n", gp->name);
 
-  for (aip = gp->dest; aip; aip = aip->ai_next) {
-    if (getnameinfo(aip->ai_addr, aip->ai_addrlen, dest, sizeof(dest), serv, sizeof(serv), NI_DGRAM|NI_NUMERICHOST|NI_NUMERICSERV) == 0) {
-      printf("  %-10s  %s Port %s\n", "Address", dest, serv);
-    } else {
-      printf("  %-10s  %s\n", "Address", "-unprintable-");
-    }
+  printf("  Targets:\n");
+  i = 0;
+  for (tp = gp->targets; tp; tp = tp->next) {
+    char *dest = target2str(tp);
+    printf("    %-2u        %s\n", i+1, dest ? dest : "???");
   }
   
   printf("  %-10s  %u\n", "Copies", gp->copies);
@@ -743,12 +784,12 @@ mac_invalid(struct ether_addr *mac) {
 int
 send_wol_host(HOST *hp) {
   int i, j;
-  struct addrinfo *aip;
   int rc;
   char *msg;
   size_t msg_size;
   GATEWAY *gp = NULL;
   SECRET *sp = NULL;
+  TARGET *tp = NULL;
   struct timespec delay;
   int copies;
 
@@ -821,7 +862,12 @@ send_wol_host(HOST *hp) {
     fflush(stdout);
   }
 
-  for (aip = gp->dest; aip; aip = aip->ai_next) {
+  for (tp = gp->targets; tp; tp = tp->next) {
+    struct addrinfo *aip = tp->aip;
+
+    if (!aip)
+      continue;
+
     for (j = 0; j < copies; j++) {
       if (j > 0 && (delay.tv_sec || delay.tv_nsec)) {
 	/* Inter-packet delay */
@@ -840,20 +886,13 @@ send_wol_host(HOST *hp) {
       }
       
       if (f_debug) {
-	char dest[2048];
-	char serv[256];
+	char *dest;
 
-	fprintf(stderr, "Sending packet #%u via ", j+1);
-	
-	if (getnameinfo(aip->ai_addr, aip->ai_addrlen, dest, sizeof(dest), serv, sizeof(serv), NI_DGRAM|NI_NUMERICHOST|NI_NUMERICSERV) == 0)
-	  fprintf(stderr, "%s port %s", dest, serv);
-	else
-	  fprintf(stderr, "???");
-
-	fprintf(stderr, "\n");
+	dest = target2str(tp);
+	fprintf(stderr, "Sending packet #%u via %s\n", j+1, dest ? dest : "???");
       }
 
-      while ((rc = sendto((aip->ai_family == AF_INET ? ipv4_fd : ipv6_fd), msg, msg_size, 0, aip->ai_addr, aip->ai_addrlen)) < 0 && errno == EINTR)
+      while ((rc = sendto(tp->fd, msg, msg_size, 0, aip->ai_addr, aip->ai_addrlen)) < 0 && errno == EINTR)
 	;
 
       if (rc < 0)
@@ -940,7 +979,7 @@ parse_config(const char *path) {
   char buf[2048], *bptr, *cptr;
   FILE *fp;
   int line = 0;
-  int len, rc;
+  int len, rc = -1;
 
   GATEWAY *gp = NULL;
   HOST *hp = NULL;
@@ -948,6 +987,8 @@ parse_config(const char *path) {
 
 
   gp = gw_lookup("default");
+  gw_add_address(gp, DEFAULT_ADDRESS);
+  gw_add_port(gp, DEFAULT_SERVICE);
 
   if (f_debug)
     fprintf(stderr, "[Parsing config: %s]\n", path);
@@ -1003,6 +1044,8 @@ parse_config(const char *path) {
 
 	if (hgp)
 	  group_add_host(hgp, hp);
+	if (all_group)
+	  group_add_host(all_group, hp);
 
       } else if (strcmp(key, "gateway") == 0) {
 	gp = gw_create(val);
@@ -1088,6 +1131,8 @@ main(int argc,
   char *home_config = strdupcat(home, "/", DEFAULT_USER_CONFIG, NULL);
   char *cp;
   int i, j;
+  GATEWAY *gp;
+  TARGET *tp;
 
 
   argv0 = argv[0];
@@ -1099,6 +1144,8 @@ main(int argc,
     fprintf(stderr, "%s: Internal error #1458934\n", argv0);
     exit(1);
   }
+
+  all_group = group_create("all");
 
   parse_config(DEFAULT_GLOBAL_CONFIG);
   if (home_config)
@@ -1181,24 +1228,20 @@ main(int argc,
 	  parse_config(cp);
 	goto NextArg;
 
-      case 'A':
-	++f_all;
-	break;
-
       case 'h':
-	printf("Usage: %s [<options>] [<host-1> [.. <host-N>]]\n",
+	printf("Usage: %s [<options>] [<host|group> [.. <host|group>]]\n",
 	       argv[0]);
 	puts("\nOptions:");
 	puts("  -h           Display this information");
-	puts("  -v           Enable verbose mode");
+	puts("  -v           Increase verbosity");
+	puts("  -d           Increase debug level");
 	puts("  -i           Ignore errors");
 	puts("  -b           Enable broadcast mode");
-	puts("  -A           All gateway hosts mode");
 	puts("  -a <addr>    Target address");
 	puts("  -p <port>    Target port number");
 	puts("  -s <time>    Inter-packet delay");
 	puts("  -c <count>   Packet copies to send");
-	puts("  -S <secret>  SecureOn secret (MAC or IPv4)");
+	puts("  -S <secret>  WoL Secret (SecureOn MAC or IPv4)");
 	puts("  -F <path>    Configuration file");
 	exit(0);
 
@@ -1218,40 +1261,44 @@ main(int argc,
   if (f_verbose)
     header(stdout);
 
+  /* Open sockets for sending packets via the gateway targets */
+  for (gp = gateways; gp; gp = gp->next) {
+    struct addrinfo hints, *aip;
+    int rc;
+
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_DGRAM;
+    
+    aip = NULL;
+    if ((rc = getaddrinfo(gp->address ? gp->address : DEFAULT_ADDRESS, gp->port ? gp->port : DEFAULT_SERVICE, &hints, &aip)) != 0) {
+      fprintf(stderr, "%s: %s port %s: Invalid target\n", argv[0], gp->address, gp->port);
+      exit(1);
+    }
+
+    for (; aip; aip = aip->ai_next) {
+      int one = 1;
+
+
+      tp = target_add(&gp->targets, aip);
+      if (!tp) {
+	fprintf(stderr, "%s: %s port %s: Internal Error #3345921\n", argv[0], gp->address, gp->port);
+	exit(1);
+      }
+
+      tp->fd = socket((aip->ai_family == AF_INET ? PF_INET : PF_INET6), SOCK_DGRAM, IPPROTO_UDP);
+      if (tp->fd < 0) {
+	fprintf(stderr, "%s: %s port %s: socket: %s\n", argv[0], gp->address, gp->port, strerror(errno));
+	exit(1);
+      }
+#ifdef SO_BROADCAST
+      (void) setsockopt(tp->fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one));
+#endif
+    }
+  }
+  
   if (f_debug > 2)
     dump_all();
-
-  ipv4_fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (ipv4_fd < 0) {
-    fprintf(stderr, "%s: socket: %s\n",
-	    argv[0], strerror(errno));
-    exit(1);
-  }
-
-  ipv6_fd = socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-  if (ipv6_fd < 0) {
-    fprintf(stderr, "%s: socket: %s\n",
-	    argv[0], strerror(errno));
-    exit(1);
-  }
-
-#ifdef SO_BROADCAST
-  if (f_broadcast) {
-    int one = 1;
-
-    if (setsockopt(ipv4_fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one)) < 0) {
-      fprintf(stderr, "%s: setsockopt(SO_BROADCAST): %s\n",
-	      argv[0], strerror(errno));
-      exit(1);
-    }
-    if (setsockopt(ipv6_fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one)) < 0) {
-      fprintf(stderr, "%s: setsockopt(SO_BROADCAST): %s\n",
-	      argv[0], strerror(errno));
-      exit(1);
-    }
-  }
-#endif
-  
 
   if (i < argc) {
     for (;i < argc; i++) {
@@ -1293,11 +1340,5 @@ main(int argc,
     }
   }
 
-  if (ipv4_fd != -1)
-    close(ipv4_fd);
-
-  if (ipv6_fd != -1)
-    close(ipv6_fd);
-
-  return 0;
+  exit(0);
 }
