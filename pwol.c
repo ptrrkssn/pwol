@@ -152,7 +152,6 @@ HOSTGROUP *all_group = NULL;
 int f_verbose = 0;
 int f_ignore = 0;
 int f_debug = 0;
-int f_broadcast = 0;
 
 char *f_copies  = NULL;
 char *f_delay   = NULL;
@@ -353,6 +352,41 @@ secret2str(SECRET *sp) {
   return buf;
 }
 
+char *
+timespec2str(struct timespec *tsp) {
+  char buf[2048];
+  unsigned int h, m, s, ms, us, ns;
+  float fs, fms, fus;
+
+
+  h = tsp->tv_sec / 3600;
+  m = (tsp->tv_sec - h*3600) / 60;
+  s = tsp->tv_sec - h*3600 - m*60;
+
+  ms = tsp->tv_nsec / 1000000;
+  us = (tsp->tv_nsec - ms * 1000000) / 1000;
+  ns = tsp->tv_nsec - ms * 1000000 - us * 1000;
+
+  fs  = (float) s +  (float) ms / 1000.0;
+  fms = (float) ms + (float) us / 1000.0;
+  fus = (float) us + (float) ns / 1000.0;
+
+  if (h)
+    sprintf(buf, "%02u:%02u:%02u", h, m, s);
+  else if (m)
+    sprintf(buf, "%um+%gs", m, fs);
+  else if (s)
+    sprintf(buf, "%gs", fs);
+  else if (ms)
+    sprintf(buf, "%gms", fms);
+  else if (us)
+    sprintf(buf, "%gµs", fus);
+  else
+    sprintf(buf, "%uns", ns);
+
+  return strdup(buf);
+}
+
 int
 str2timespec(const char *time,
 	     struct timespec *tsp) {
@@ -379,7 +413,7 @@ str2timespec(const char *time,
   } else if (strcmp(buf, "ms") == 0) {
     tsp->tv_sec  = ft/1000.0;
     tsp->tv_nsec = ft*1000000.0;
-  } else if (strcmp(buf, "us") == 0) {
+  } else if (strcmp(buf, "us") == 0 || strcmp(buf, "µs") == 0) {
     tsp->tv_sec  = ft/1000000.0;
     tsp->tv_nsec = ft*1000.0;
   } else if (strcmp(buf, "ns") == 0) {
@@ -409,6 +443,19 @@ gw_lookup(const char *name) {
   return gp;
 }
 
+
+int
+gw_add_name(GATEWAY *gp,
+	    const char *name) {
+  if (!name)
+    return -1;
+ 
+  if (gp->name)
+    free(gp->name);
+
+  gp->name = strdup(name);
+  return 0;
+}
 
 int
 gw_add_address(GATEWAY *gp,
@@ -591,6 +638,19 @@ host_add_via(HOST *hp,
 }
 
 int
+host_add_name(HOST *hp,
+	      const char *name) {
+  if (!name)
+    return -1;
+ 
+  if (hp->name)
+    free(hp->name);
+
+  hp->name = strdup(name);
+  return 0;
+}
+
+int
 host_add_delay(HOST *hp,
 	       const char *delay) {
   if (!delay)
@@ -710,11 +770,12 @@ gw_print(GATEWAY *gp) {
   for (tp = gp->targets; tp; tp = tp->next) {
     char *dest = target2str(tp);
     printf("    %-2u        %s\n", i+1, dest ? dest : "???");
+    ++i;
   }
   
   printf("  %-10s  %u\n", "Copies", gp->copies);
   if (gp->delay.tv_sec || gp->delay.tv_nsec)
-    printf("  %-10s  %g ms\n", "Delay",  ((float) gp->delay.tv_sec * 1000.0)+((float) gp->delay.tv_nsec / 1000000.0));
+    printf("  %-10s  %s\n", "Delay",  timespec2str(&gp->delay));
   if (gp->secret.size > 0)
     printf("  %-10s  %s\n", "Secret", secret2str(&gp->secret));
 }
@@ -728,7 +789,7 @@ host_print(HOST *hp) {
 
   printf("  %-10s  %u\n", "Copies", hp->copies);
   if (hp->delay.tv_sec || hp->delay.tv_nsec)
-    printf("  %-10s  %g ms\n", "Delay",  ((float) hp->delay.tv_sec * 1000.0)+((float) hp->delay.tv_nsec / 1000000.0));
+    printf("  %-10s  %s\n", "Delay",  timespec2str(&hp->delay));
   if (hp->secret.size > 0)
     printf("  %-10s  %s\n", "Secret", secret2str(&hp->secret));
 }
@@ -852,7 +913,7 @@ send_wol_host(HOST *hp) {
     fprintf(stderr, "]\n");
   }
 
-  if (f_debug > 1) {
+  if (f_debug > 2) {
     fprintf(stderr, "UDP Packet:\n");
     buf_print(stderr, msg, msg_size);
   }
@@ -874,11 +935,11 @@ send_wol_host(HOST *hp) {
 	struct timespec t_delay = delay;
 	
 	if (f_debug)
-	  fprintf(stderr, "(Sleeping %g ms)\n", ((float) delay.tv_sec * 1000.0)+((float) delay.tv_nsec / 1000000.0));
+	  fprintf(stderr, "(Sleeping %s)\n", timespec2str(&delay));
 	
 	while ((rc = nanosleep(&t_delay, &t_delay)) < 0 && errno == EINTR) {
 	  if (f_debug)
-	    fprintf(stderr, "(Sleeping %g ms more)\n", ((float) delay.tv_sec * 1000.0)+((float) delay.tv_nsec / 1000000.0));
+	    fprintf(stderr, "(Sleeping %s more)\n", timespec2str(&delay));
 	}
 
 	if (rc < 0)
@@ -903,11 +964,9 @@ send_wol_host(HOST *hp) {
 	fflush(stdout);
       }
     }
-  }
-  
-  if (f_verbose && !f_debug) {
-    putc('\n', stdout);
-    fflush(stdout);
+
+    if (f_verbose && !f_debug)
+      puts(" Done");
   }
   return 0;
 }
@@ -990,7 +1049,7 @@ parse_config(const char *path) {
   gw_add_address(gp, DEFAULT_ADDRESS);
   gw_add_port(gp, DEFAULT_SERVICE);
 
-  if (f_debug)
+  if (f_debug > 1)
     fprintf(stderr, "[Parsing config: %s]\n", path);
 
   fp = fopen(path, "r");
@@ -1012,11 +1071,15 @@ parse_config(const char *path) {
 
     while ((key = strtok_r(bptr, " \t", &cptr)) != NULL) {
       bptr = NULL;
+      val = strtok_r(bptr, " \t", &cptr);
+
+      if (f_debug > 1) 
+	fprintf(stderr, "Got: %s %s\n", key, val ? val : "");
 
       if (key[0] == '[' && key[len = strlen(key)-1] == ']') {
 	key[len] = '\0';
 	
-	if (f_debug)
+	if (f_debug > 2)
 	  fprintf(stderr, "[Switching hostgroup to %s]\n", key+1);
 	
 	hgp = group_create(key+1);
@@ -1030,7 +1093,6 @@ parse_config(const char *path) {
 	continue;
       }
 
-      val = strtok_r(bptr, " \t", &cptr);
       if (strcmp(key, "host") == 0) {
 	hp = host_create(val, gp);
 	if (!hp) {
@@ -1056,6 +1118,11 @@ parse_config(const char *path) {
 	}
 	hp = NULL;
 
+      } else if (strcmp(key, "name") == 0) {
+	if (hp)
+	  rc = host_add_name(hp, val);
+	else
+	  rc = gw_add_name(gp, val);
       } else if (strcmp(key, "mac") == 0) {
 	if (hp)
 	  rc = host_add_mac(hp, val);
@@ -1113,14 +1180,21 @@ dump_all(void) {
   HOST *hp;
   HOSTGROUP *hgp;
 
-  for (gp = gateways; gp; gp = gp->next)
+
+  for (gp = gateways; gp; gp = gp->next) {
+    putchar('\n');
     gw_print(gp);
+  }
 
-  for (hp = hosts; hp; hp = hp->next)
+  for (hp = hosts; hp; hp = hp->next) {
+    putchar('\n');
     host_print(hp);
+  }
 
-  for (hgp = hostgroups; hgp; hgp = hgp->next)
+  for (hgp = hostgroups; hgp; hgp = hgp->next) {
+    putchar('\n');
     group_print(hgp);
+  }
 }
 
 int
@@ -1168,10 +1242,6 @@ main(int argc,
 		
       case 'i':
 	++f_ignore;
-	break;
-		
-      case 'b':
-	++f_broadcast;
 	break;
 		
       case 'a':
@@ -1235,7 +1305,7 @@ main(int argc,
 	puts("  -h           Display this information");
 	puts("  -v           Increase verbosity");
 	puts("  -d           Increase debug level");
-	puts("  -i           Ignore errors");
+	puts("  -i           Ignore transmission errors");
 	puts("  -b           Enable broadcast mode");
 	puts("  -a <addr>    Target address");
 	puts("  -p <port>    Target port number");
@@ -1297,7 +1367,7 @@ main(int argc,
     }
   }
   
-  if (f_debug > 2)
+  if (f_debug)
     dump_all();
 
   if (i < argc) {
@@ -1309,33 +1379,30 @@ main(int argc,
       }
     }
   } else {
-    char lbuf[80], *lp;
-    int len;
+    char lbuf[80], *lp, *lptr, *cp;
+
 	
-    if (f_verbose && isatty(0)) 
-      puts("Enter hosts, one per line:");
+    if ((f_verbose || f_debug) && isatty(0)) {
+      fputs("Enter hosts or groups:\n", stderr);
+      fflush(stderr);
+    }
 
     while (fgets(lbuf, sizeof(lbuf), stdin)) {
-      lp = strchr(lbuf, '#');
-      if (lp)
-	*lp = 0;
-	    
-      lp = lbuf;
-      while (isspace(*lp))
-	++lp;
-	    
-      len = strlen(lp)-1;
-      while (len > 0 && isspace(lp[len-1]))
-	--len;
-      lp[len] = 0;
-	    
-      if (!*lp)
+      trim(lbuf);
+      if (!*lbuf)
 	continue;
 
-      if (send_wol(lp) < 0 && !f_ignore) {
-	fprintf(stderr, "%s: %s: Sending WoL packet failed: %s\n",
-		argv[0], lp, strerror(errno));
-	exit(1);
+      lp = lbuf;
+      while ((cp = strtok_r(lp, " \t", &lptr)) != NULL) {
+	lp = NULL;
+
+	if (send_wol(cp) < 0) {
+	  fprintf(stderr, "%s: %s: Sending WoL packet failed: %s\n",
+		  argv[0], cp, strerror(errno));
+	  
+	  if (!f_ignore)
+	    exit(1);
+	}
       }
     }
   }

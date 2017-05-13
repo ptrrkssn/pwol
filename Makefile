@@ -6,7 +6,7 @@ CFLAGS=-g -O -DVERSION="\"$(VERSION)\""
 DEST=
 
 PACKAGE=pwol
-VERSION=1.1
+VERSION=1.2
 
 BIN=pwol
 BINOBJS=pwol.o
