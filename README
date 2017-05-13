@@ -1,0 +1,26 @@
+Peter's Wake-On-LAN utility
+
+Author:   Peter Eriksson <pen@lysator.liu.se>
+Website:  https://github.com/ptrrkssn/pwol
+
+pwol is a command line utility to send WoL packets to one or many hosts, either 
+locally or via routers, in order to wake them up from sleep mode.
+
+
+LICENSE 
+
+BSD standard license. See the file LICENSE for details.
+
+
+BUILD INSTRUCTIONS
+
+Edit 'Makefile' and run 'make'
+
+
+USAGE
+
+pwol looks for a configuration file in two places by default, /etc/pwol.conf and 
+$HOME/.pwolrc. Additional configuration files may be specified via the "-F" command 
+line switch.
+
+See the "pwol.conf" file for details.
