@@ -5,7 +5,7 @@ CC=gcc -Wall
 CFLAGS=-g -O -DVERSION="\"$(VERSION)\""
 
 PACKAGE=pwol
-VERSION=1.3
+VERSION=1.4
 
 ETCDIR=$(DEST)/etc
 BINDIR=$(DEST)/bin
