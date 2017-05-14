@@ -146,6 +146,8 @@ HOST *hosts = NULL;
 typedef struct hostgroup {
   char *name;
 
+  struct timespec delay;
+
   HOST **hv;
   size_t hs;
   size_t hc;
@@ -173,9 +175,11 @@ char *f_address = NULL;
 char *f_port    = NULL;
 char *f_gateway = NULL;
 
+char *f_host_delay    = NULL;
+
 char *f_proxy_address = NULL;
-char *f_proxy_port = NULL;
-char *f_proxy_secret = NULL;
+char *f_proxy_port    = NULL;
+char *f_proxy_secret  = NULL;
 
 char *
 strdupcat(const char *str,
@@ -731,6 +735,16 @@ host_create(const char *name) {
 }
 
 
+int
+group_add_delay(HOSTGROUP *hgp,
+		const char *delay) {
+  if (!delay)
+    return -1;
+  
+  return str2timespec(delay, &hgp->delay);
+}
+
+
 
 int
 group_add_host(HOSTGROUP *hgp, 
@@ -833,6 +847,12 @@ gw_print(GATEWAY *gp) {
   if (f_verbose) {
     printf("Gateway %s:\n", gp->name);
     
+    if (gp->copies)
+      printf("  %-10s  %u\n", "Copies", gp->copies);
+    if (gp->delay.tv_sec || gp->delay.tv_nsec)
+      printf("  %-10s  %s\n", "Delay",  timespec2str(&gp->delay));
+    if (gp->secret.size > 0)
+      printf("  %-10s  %s\n", "Secret", secret2str(&gp->secret));
     printf("  Targets:\n");
     i = 0;
     for (tp = gp->targets; tp; tp = tp->next) {
@@ -840,13 +860,6 @@ gw_print(GATEWAY *gp) {
       printf("    %-2u        %s\n", i+1, dest ? dest : "???");
       ++i;
     }
-    
-    if (gp->copies)
-      printf("  %-10s  %u\n", "Copies", gp->copies);
-    if (gp->delay.tv_sec || gp->delay.tv_nsec)
-      printf("  %-10s  %s\n", "Delay",  timespec2str(&gp->delay));
-    if (gp->secret.size > 0)
-      printf("  %-10s  %s\n", "Secret", secret2str(&gp->secret));
 
   } else {
 
@@ -902,10 +915,16 @@ group_print(HOSTGROUP *hgp) {
 
   if (f_verbose) {
     printf("Hostgroup %s:\n", hgp->name);
+    if (hgp->delay.tv_sec || hgp->delay.tv_nsec)
+      printf("  %-10s  %s\n", "Delay",  timespec2str(&hgp->delay));
+    if (hgp->hc > 0)
+      printf("  Hosts:\n");
     for (i = 0; i < hgp->hc; i++)
-      printf("  %2d\t%s\n", i+1, hgp->hv[i]->name);
+      printf("    %2d        %s\n", i+1, hgp->hv[i]->name);
   } else {
     printf("[%s]\n", hgp->name);
+    if (hgp->delay.tv_sec || hgp->delay.tv_nsec)
+      printf("delay %s\n", timespec2str(&hgp->delay));
     for (i = 0; i < hgp->hc; i++) {
       HOST *hp = hgp->hv[i];
 
@@ -1125,6 +1144,22 @@ send_wol(const char *name) {
   
   if ((hgp = group_lookup(name)) != NULL) {
     for (i = 0; i < hgp->hc; i++) {
+      if (i > 0 && (hgp->delay.tv_sec || hgp->delay.tv_nsec)) {
+	/* Inter-host delay */
+	struct timespec delay = hgp->delay;
+	
+	if (f_debug)
+	  fprintf(stderr, "(Sleeping %s)\n", timespec2str(&delay));
+	
+	while ((rc = nanosleep(&delay, &delay)) < 0 && errno == EINTR) {
+	  if (f_debug)
+	    fprintf(stderr, "(Sleeping %s more)\n", timespec2str(&delay));
+	}
+	
+	if (rc < 0)
+	  return -1;
+      }
+
       rc = send_wol_host(hgp->hv[i]);
       if (rc) 
 	return rc;
@@ -1256,6 +1291,11 @@ parse_config(const char *path) {
 	  group_add_host(all_group, hp);
 
       } else if (strcmp(key, "gateway") == 0) {
+	if (hgp) {
+	  fprintf(stderr, "%s: %s#%u: Can not define gateways in groups\n",
+		  argv0, path, line);
+	  exit(1);
+	}
 	gp = gw_create(val);
 	if (!gp) {
 	  fprintf(stderr, "%s: %s#%u: %s: Invalid gateway name\n",
@@ -1265,6 +1305,8 @@ parse_config(const char *path) {
 	hp = NULL;
 
       } else if (strcmp(key, "name") == 0) {
+	if (hgp && !hp)
+	  goto InvalidOpt;
 	if (hp)
 	  rc = host_add_name(hp, val);
 	else
@@ -1281,17 +1323,23 @@ parse_config(const char *path) {
 	else
 	  goto InvalidOpt;
       }	else if (strcmp(key, "copies") == 0) {
+	if (hgp && !hp)
+	  goto InvalidOpt;
 	if (hp)
 	  rc = host_add_copies(hp, val);
 	else
 	  rc = gw_add_copies(gp, val);
       } else if (strcmp(key, "secret") == 0) {
+	if (hgp && !hp)
+	  goto InvalidOpt;
 	if (hp)
 	  rc = host_add_secret(hp, val);
 	else
 	  rc = gw_add_secret(gp, val);
       } else if (strcmp(key, "delay") == 0) {
-	if (hp)
+	if (hgp && !hp)
+	  rc = group_add_delay(hgp, val);
+	else if (hp)
 	  rc = host_add_delay(hp, val);
 	else
 	  rc = gw_add_delay(gp, val);
@@ -1564,6 +1612,7 @@ main(int argc,
   int i, j;
   GATEWAY *gp, *proxy_gp = NULL;
   TARGET *tp;
+  HOSTGROUP *hgp;
 
 
   argv0 = argv[0];
@@ -1658,6 +1707,15 @@ main(int argc,
 	  f_delay = strdup(cp);
 	goto NextArg;
 
+      case 'T':
+	cp = argv[i]+j+1;
+	if (!*cp && i+1 < argc) {
+	  cp = argv[++i];
+	}
+	if (cp)
+	  f_host_delay = strdup(cp);
+	goto NextArg;
+
       case 'c':
 	cp = argv[i]+j+1;
 	if (!*cp && i+1 < argc) {
@@ -1734,7 +1792,8 @@ main(int argc,
 	puts("  -g <name>    Destination gateway");
 	puts("  -a <addr>    Destination address");
 	puts("  -p <port>    Destination port");
-	puts("  -t <time>    Inter-packet delay time");
+	puts("  -t <time>    Inter-packet delay");
+	puts("  -T <time>    Inter-host delay");
 	puts("  -c <count>   Packet copies to send");
 	puts("  -s <secret>  Force WoL secret");
 	puts("");
@@ -1820,6 +1879,11 @@ main(int argc,
     }
   }
   
+  if (f_host_delay) {
+    for (hgp = hostgroups; hgp; hgp = hgp->next)
+      group_add_delay(hgp, f_host_delay);
+  }
+
   if (f_export) {
     export_all();
     exit(0);
