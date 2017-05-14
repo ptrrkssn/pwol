@@ -301,7 +301,7 @@ int
 str2secret(const char *secret,
 	   SECRET *sp) {
   unsigned int v1, v2, v3, v4, val, i;
-  char *ptr, *cp;
+  char *ptr, *cp, *tbuf;
 
 
   if (sscanf(secret, "%u.%u.%u.%u", &v1, &v2, &v3, &v4) == 4) {
@@ -320,11 +320,10 @@ str2secret(const char *secret,
   if (!ptr)
     return -1;
 
-  for (i = 0; i < SECRET_MAX_SIZE; i++) {
-    cp = strsep(&ptr, ":-");
-    if (cp == NULL)
-      break;
-
+  tbuf = ptr;
+  for (i = 0; i < SECRET_MAX_SIZE && (cp = strtok_r(tbuf, ":-", &ptr)) != NULL; i++) {
+    tbuf = NULL;
+    
     if (strlen(cp) > 2 || sscanf(cp, "%x", &val) != 1) {
       i = 0;
       break;
@@ -1462,7 +1461,7 @@ int daemon_run(GATEWAY *gp) {
 
 	if (rlen < WOL_BODY_SIZE) {
 	  if (f_debug)
-	    fprintf(stderr, "*** Invalid WoL message (too short: %lu bytes)\n", rlen);
+	    fprintf(stderr, "*** Invalid WoL message (too short: %d bytes)\n", (int) rlen);
 	  continue;
 	}
 

@@ -16,7 +16,7 @@ BINOBJS=pwol.o
 LIBS=
 
 # Needed for Solaris:
-#LIBS=-lnsl -lsocket
+#LIBS=-lnsl -lsocket -lrt
 
 
 all: pwol
