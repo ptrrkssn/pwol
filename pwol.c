@@ -60,9 +60,9 @@
 
 #define DEFAULT_ADDRESS         "255.255.255.255"
 #define DEFAULT_SERVICE         "7"
+#define DEFAULT_COPIES          "1"
 #define DEFAULT_SECRET          NULL
 #define DEFAULT_DELAY           NULL
-#define DEFAULT_COPIES          3
 
 #define HEADER_SIZE             6
 #define MAC_SIZE                6
@@ -117,7 +117,7 @@ typedef struct gateway {
 } GATEWAY;
 
 GATEWAY *gateways = NULL;
-GATEWAY *default_gp = NULL;
+GATEWAY *default_gw = NULL;
 
 
 typedef struct host {
@@ -152,6 +152,9 @@ HOSTGROUP *all_group = NULL;
 int f_verbose = 0;
 int f_ignore = 0;
 int f_debug = 0;
+int f_no = 0;
+int f_dump = 0;
+
 
 char *f_copies  = NULL;
 char *f_delay   = NULL;
@@ -159,7 +162,7 @@ char *f_secret  = NULL;
 
 char *f_address = NULL;
 char *f_service = NULL;
-GATEWAY *f_via  = NULL;
+char *f_gateway = NULL;
 
 
 
@@ -468,9 +471,59 @@ gw_add_address(GATEWAY *gp,
 }
 
 
+HOSTGROUP *
+group_lookup(const char *name) {
+  HOSTGROUP *hgp;
+
+
+  if (!name)
+    return NULL;
+
+  for (hgp = hostgroups; hgp && strcmp(hgp->name, name) != 0; hgp = hgp->next)
+    ;
+
+  if (!hgp)
+    errno = ENXIO;
+
+  return hgp;
+}
+
+HOSTGROUP *
+group_create(const char *name) {
+  HOSTGROUP *hgp, **thgp;
+
+
+  if (!name)
+    return NULL;
+
+  hgp = group_lookup(name);
+  if (hgp)
+    return hgp;
+
+  hgp = malloc(sizeof(*hgp));
+  if (!hgp)
+    return NULL;
+
+  memset(hgp, 0, sizeof(*hgp));
+  hgp->name = strdup(name);
+
+  hgp->hs = DEFAULT_HOSTGROUP_HOSTS;
+  hgp->hc = 0;
+  hgp->hv = malloc(hgp->hs * sizeof(HOST *));
+  if (!hgp->hv)
+    return NULL;
+
+  for (thgp = &hostgroups; *thgp; thgp = &((*thgp)->next))
+    ;
+
+  *thgp = hgp;
+  return hgp;
+}
+
+
 GATEWAY *
 gw_create(const char *name) {
-  GATEWAY *gp;
+  GATEWAY *gp, **tgp;
 
 
   if (!name)
@@ -488,20 +541,28 @@ gw_create(const char *name) {
 
   gp->name = strdup(name);
 
-  if (default_gp) {
-    gp->address = default_gp->address;
-    gp->port    = default_gp->port;
-    gp->targets = default_gp->targets;
+#if 0
+  if (default_gw) {
+    gp->address = default_gw->address;
+    gp->port    = default_gw->port;
+    gp->targets = default_gw->targets;
 
-    gp->copies  = default_gp->copies;
-    gp->delay   = default_gp->delay;
-    gp->secret  = default_gp->secret;
+    gp->copies  = default_gw->copies;
+    gp->delay   = default_gw->delay;
+    gp->secret  = default_gw->secret;
   }
+#endif
 
+  /* Try to use gateway name as address */
   (void) gw_add_address(gp, name);
 
-  gp->next = gateways;
-  gateways = gp;
+  /* Autocreate group name */
+  (void) group_create(name);
+
+  for (tgp = &gateways; *tgp; tgp = &((*tgp)->next))
+    ;
+
+  *tgp = gp;
 
   return gp;
 }
@@ -585,9 +646,8 @@ host_add_mac(HOST *hp,
 
 
 HOST *
-host_create(const char *name,
-	    GATEWAY *gp) {
-  HOST *hp;
+host_create(const char *name) {
+  HOST *hp, **thp;
 
 
   if (!name)
@@ -607,6 +667,7 @@ host_create(const char *name,
   /* Try to lookup mac via name in ethers file */
   (void) host_add_mac(hp, name);
 
+#if 0
   if (gp) {
     hp->via    = gp;
 
@@ -614,25 +675,62 @@ host_create(const char *name,
     hp->delay  = gp->delay;
     hp->secret = gp->secret;
   }
-  
-  hp->next = hosts;
-  hosts = hp;
+#endif
 
+  for (thp = &hosts; *thp; thp = &((*thp)->next))
+    ;
+
+  *thp = hp;
   return hp;
 }
 
+
+
+int
+group_add_host(HOSTGROUP *hgp, 
+	       HOST *hp) {
+  int i;
+
+
+  if (!hgp)
+    return -1;
+
+  if (!hp)
+    return -1;
+
+  for (i = 0; i < hgp->hc && hp != hgp->hv[i]; i++)
+    ;
+
+  if (i < hgp->hc)
+    return hgp->hc;
+
+  if (hgp->hc >= hgp->hs) {
+    hgp->hs += DEFAULT_HOSTGROUP_HOSTS;
+    hgp->hv = realloc(hgp->hv, hgp->hs * sizeof(HOST *));
+    if (!hgp->hv)
+      return -1;
+  }
+
+  hgp->hv[hgp->hc++] = hp;
+  return hgp->hc;
+}
 
 
 
 int
 host_add_via(HOST *hp,
 	     const char *via) {
+  HOSTGROUP *hgp;
+
   if (!via)
     return -1;
 
   hp->via = gw_lookup(via);
   if (!hp->via)
     return -1;
+
+  hgp = group_lookup(hp->via->name);
+  group_add_host(hgp, hp);
 
   return 0;
 }
@@ -679,83 +777,6 @@ host_add_secret(HOST *hp,
 
 
 
-HOSTGROUP *
-group_lookup(const char *name) {
-  HOSTGROUP *hgp;
-
-
-  if (!name)
-    return NULL;
-
-  for (hgp = hostgroups; hgp && strcmp(hgp->name, name) != 0; hgp = hgp->next)
-    ;
-
-  if (!hgp)
-    errno = ENXIO;
-
-  return hgp;
-}
-
-
-HOSTGROUP *
-group_create(const char *name) {
-  HOSTGROUP *hgp;
-
-
-  if (!name)
-    return NULL;
-
-  hgp = group_lookup(name);
-  if (hgp)
-    return hgp;
-
-  hgp = malloc(sizeof(*hgp));
-  if (!hgp)
-    return NULL;
-
-  memset(hgp, 0, sizeof(*hgp));
-  hgp->name = strdup(name);
-
-  hgp->hs = DEFAULT_HOSTGROUP_HOSTS;
-  hgp->hc = 0;
-  hgp->hv = malloc(hgp->hs * sizeof(HOST *));
-  if (!hgp->hv)
-    return NULL;
-
-  hgp->next = hostgroups;
-  hostgroups = hgp;
-
-  return hgp;
-}
-
-int
-group_add_host(HOSTGROUP *hgp, 
-	       HOST *hp) {
-  int i;
-
-
-  if (!hgp)
-    return -1;
-
-  if (!hp)
-    return -1;
-
-  for (i = 0; i < hgp->hc && hp != hgp->hv[i]; i++)
-    ;
-
-  if (i < hgp->hc)
-    return hgp->hc;
-
-  if (hgp->hc >= hgp->hs) {
-    hgp->hs += DEFAULT_HOSTGROUP_HOSTS;
-    hgp->hv = realloc(hgp->hv, hgp->hs * sizeof(HOST *));
-    if (!hgp->hv)
-      return -1;
-  }
-
-  hgp->hv[hgp->hc++] = hp;
-  return hgp->hc;
-}
 
 void
 gw_print(GATEWAY *gp) {
@@ -763,43 +784,99 @@ gw_print(GATEWAY *gp) {
   unsigned int i;
 
 
-  printf("Gateway %s:\n", gp->name);
+  if (f_verbose) {
+    printf("Gateway %s:\n", gp->name);
+    
+    printf("  Targets:\n");
+    i = 0;
+    for (tp = gp->targets; tp; tp = tp->next) {
+      char *dest = target2str(tp);
+      printf("    %-2u        %s\n", i+1, dest ? dest : "???");
+      ++i;
+    }
+    
+    if (gp->copies)
+      printf("  %-10s  %u\n", "Copies", gp->copies);
+    if (gp->delay.tv_sec || gp->delay.tv_nsec)
+      printf("  %-10s  %s\n", "Delay",  timespec2str(&gp->delay));
+    if (gp->secret.size > 0)
+      printf("  %-10s  %s\n", "Secret", secret2str(&gp->secret));
 
-  printf("  Targets:\n");
-  i = 0;
-  for (tp = gp->targets; tp; tp = tp->next) {
-    char *dest = target2str(tp);
-    printf("    %-2u        %s\n", i+1, dest ? dest : "???");
-    ++i;
+  } else {
+
+    printf("gateway %s", gp->name);
+    if (gp->address && strcmp(gp->address, gp->name) != 0)
+      printf(" address %s", gp->address);
+    if (gp->port && strcmp(gp->port, default_gw->port) != 0)
+      printf(" port %s", gp->port);
+    if (gp->copies && gp->copies != default_gw->copies)
+      printf(" copies %u", gp->copies);
+    if ((gp->delay.tv_sec || gp->delay.tv_nsec) && 
+	!(gp->delay.tv_sec == default_gw->delay.tv_sec && gp->delay.tv_nsec == default_gw->delay.tv_nsec))
+      printf(" delay %s", timespec2str(&gp->delay));
+    if (gp->secret.size > 0 && (gp->secret.size != default_gw->secret.size || memcmp(gp->secret.buf, default_gw->secret.buf, gp->secret.size) != 0))
+      printf(" secret %s", secret2str(&gp->secret));
+    putchar('\n');
   }
-  
-  printf("  %-10s  %u\n", "Copies", gp->copies);
-  if (gp->delay.tv_sec || gp->delay.tv_nsec)
-    printf("  %-10s  %s\n", "Delay",  timespec2str(&gp->delay));
-  if (gp->secret.size > 0)
-    printf("  %-10s  %s\n", "Secret", secret2str(&gp->secret));
 }
+
 
 void
 host_print(HOST *hp) {
-  printf("Host %s:\n", hp->name);
-
-  if (hp->via)
-    printf("  %-10s  %s\n", "Gateway", hp->via->name);
-
-  printf("  %-10s  %u\n", "Copies", hp->copies);
-  if (hp->delay.tv_sec || hp->delay.tv_nsec)
-    printf("  %-10s  %s\n", "Delay",  timespec2str(&hp->delay));
-  if (hp->secret.size > 0)
-    printf("  %-10s  %s\n", "Secret", secret2str(&hp->secret));
+  if (f_verbose) {
+    printf("Host %s:\n", hp->name);
+    
+    if (hp->via)
+      printf("  %-10s  %s\n", "Gateway", hp->via->name);
+    if (hp->copies)
+      printf("  %-10s  %u\n", "Copies", hp->copies);
+    if (hp->delay.tv_sec || hp->delay.tv_nsec)
+      printf("  %-10s  %s\n", "Delay",  timespec2str(&hp->delay));
+    if (hp->secret.size > 0)
+      printf("  %-10s  %s\n", "Secret", secret2str(&hp->secret));
+  } else {
+    if (!hp->via || group_lookup(hp->via->name) == NULL) {
+      printf("host %s", hp->name);
+      if (hp->via)
+	printf(" via %s", hp->via->name);
+      if (hp->copies)
+	printf(" copies %u", hp->copies);
+      if (hp->delay.tv_sec || hp->delay.tv_nsec)
+	printf(" delay %s", timespec2str(&hp->delay));
+      if (hp->secret.size > 0)
+	printf(" secret %s", secret2str(&hp->secret));
+      putchar('\n');
+    }
+  }
 }
 
 void
 group_print(HOSTGROUP *hgp) {
   int i;
-  printf("Hostgroup %s:\n", hgp->name);
-  for (i = 0; i < hgp->hc; i++)
-    printf("  %2d\t%s\n", i+1, hgp->hv[i]->name);
+
+  if (f_verbose) {
+    printf("Hostgroup %s:\n", hgp->name);
+    for (i = 0; i < hgp->hc; i++)
+      printf("  %2d\t%s\n", i+1, hgp->hv[i]->name);
+  } else {
+    printf("[%s]\n", hgp->name);
+    for (i = 0; i < hgp->hc; i++) {
+      HOST *hp = hgp->hv[i];
+
+      printf("host %s", hp->name);
+
+      if (!hp->via || (hp->via && strcmp(hp->via->name, hgp->name) == 0)) {
+	if (hp->copies)
+	  printf(" copies %u", hp->copies);
+	if (hp->delay.tv_sec || hp->delay.tv_nsec)
+	  printf(" delay %s", timespec2str(&hp->delay));
+	if (hp->secret.size > 0)
+	  printf(" secret %s", secret2str(&hp->secret));
+      }
+
+      putchar('\n');
+    }
+  }
 }
  
  void
@@ -859,35 +936,53 @@ send_wol_host(HOST *hp) {
     return -1;
 
   if (mac_invalid(&hp->mac)) {
-    fprintf(stderr, "%s: %s: %s: Invalid MAC address for host\n", argv0, hp->name,
-	    ether_ntoa(&hp->mac));
+    errno = EINVAL;
     return -1;
   }
 
-  if (f_via)
-    hp->via = f_via;
-  gp = hp->via;
+  if (f_gateway) {
+    gp = gw_lookup(f_gateway);
+    if (!gp) {
+      errno = EINVAL;
+      return -1;
+    }
+  }
   if (!gp)
-    gp = default_gp;
+    gp = default_gw;
+  hp->via = gp;
 
-  if (f_copies)
-    host_add_copies(hp, f_copies);
+
+  if (f_copies) {
+    if (host_add_copies(hp, f_copies) < 0) {
+      errno = EINVAL;
+      return -1;
+    }
+  }
   copies = hp->copies;
   if (!copies && hp->via)
     copies = hp->via->copies;
   if (!copies)
-    copies = DEFAULT_COPIES;
+    copies = 1;
 
-  if (f_delay)
-    host_add_delay(hp, f_delay);
+  if (f_delay) {
+    if (host_add_delay(hp, f_delay) < 0) {
+      errno = EINVAL;
+      return -1;
+    }
+  }
   delay = hp->delay;
   if (delay.tv_sec == 0 && delay.tv_nsec == 0 && hp->via)
     delay = hp->via->delay;
 
-  if (f_secret) 
-    host_add_secret(hp, f_secret);
+
+  if (f_secret) {
+    if (host_add_secret(hp, f_secret) < 0) {
+      errno = EINVAL;
+      return -1;
+    }
+  }
   sp = &hp->secret;
-  if ((!sp || !sp->size) && hp->via)
+  if (sp->size == 0 && hp->via)
     sp = &hp->via->secret;
   
   msg_size = HEADER_SIZE+16*MAC_SIZE;
@@ -953,11 +1048,13 @@ send_wol_host(HOST *hp) {
 	fprintf(stderr, "Sending packet #%u via %s\n", j+1, dest ? dest : "???");
       }
 
-      while ((rc = sendto(tp->fd, msg, msg_size, 0, aip->ai_addr, aip->ai_addrlen)) < 0 && errno == EINTR)
-	;
-
-      if (rc < 0)
-	return -1;
+      if (!f_no) {
+	while ((rc = sendto(tp->fd, msg, msg_size, 0, aip->ai_addr, aip->ai_addrlen)) < 0 && errno == EINTR)
+	  ;
+	
+	if (rc < 0)
+	  return -1;
+      }
 
       if (f_verbose && !f_debug) {
 	putc('.', stdout);
@@ -990,7 +1087,7 @@ send_wol(const char *name) {
   
   hp = host_lookup(name);
   if (!hp) {
-    hp = host_create(name, default_gp);
+    hp = host_create(name);
     if (!hp)
       return -1;
     
@@ -1041,6 +1138,7 @@ parse_config(const char *path) {
   int len, rc = -1;
 
   GATEWAY *gp = NULL;
+  GATEWAY *group_gp = NULL;
   HOST *hp = NULL;
   HOSTGROUP *hgp = NULL;
 
@@ -1089,23 +1187,24 @@ parse_config(const char *path) {
 	}
 	
 	/* Try to lookup gateway with same name as hostgroup */
-	gp = gw_lookup(key+1);
+	group_gp = gw_lookup(key+1);
 	continue;
       }
 
       if (strcmp(key, "host") == 0) {
-	hp = host_create(val, gp);
+	hp = host_create(val);
 	if (!hp) {
 	  fprintf(stderr, "%s: %s#%u: %s: Invalid host name\n",
 		  argv0, path, line, val);
 	  exit(1);
 	}
 
-	if (gp)
-	  hp->via = gp;
+	if (hp->via == NULL && group_gp)
+	  hp->via = group_gp;
 
 	if (hgp)
 	  group_add_host(hgp, hp);
+
 	if (all_group)
 	  group_add_host(all_group, hp);
 
@@ -1129,8 +1228,9 @@ parse_config(const char *path) {
 	else
 	  goto InvalidOpt;
       } else if (strcmp(key, "via") == 0) {
-	if (hp)
+	if (hp) {
 	  rc = host_add_via(hp, val);
+	}
 	else
 	  goto InvalidOpt;
       }	else if (strcmp(key, "copies") == 0) {
@@ -1179,20 +1279,42 @@ dump_all(void) {
   GATEWAY *gp;
   HOST *hp;
   HOSTGROUP *hgp;
+  int n;
 
 
-  for (gp = gateways; gp; gp = gp->next) {
+  if (!f_verbose) {
+    puts("; pwol configuration");
     putchar('\n');
+    puts("; Gateways:");
+  }
+  for (gp = gateways; gp; gp = gp->next) {
+    //    if (!f_verbose && strcmp(gp->name, "default") == 0)
+    //      continue;
     gw_print(gp);
   }
 
+  putchar('\n');
+  if (!f_verbose) {
+    puts("; Hosts:");
+  }
   for (hp = hosts; hp; hp = hp->next) {
-    putchar('\n');
     host_print(hp);
   }
 
+  putchar('\n');
+  if (!f_verbose) {
+    puts("; Groups:");
+  }
+  n = 0;
   for (hgp = hostgroups; hgp; hgp = hgp->next) {
-    putchar('\n');
+    if (!f_verbose && strcmp(hgp->name, "all") == 0)
+      continue;
+    
+    if (hgp->hc == 0)
+      continue;
+
+    if (n++ > 0 && !f_verbose)
+      putchar('\n');
     group_print(hgp);
   }
 }
@@ -1213,11 +1335,16 @@ main(int argc,
 
   /* Create default */
   
-  default_gp = gw_create("default");
-  if (!default_gp) {
+  default_gw = gw_create("default");
+  if (!default_gw) {
     fprintf(stderr, "%s: Internal error #1458934\n", argv0);
     exit(1);
   }
+  gw_add_address(default_gw, DEFAULT_ADDRESS);
+  gw_add_port(default_gw, DEFAULT_SERVICE);
+  gw_add_copies(default_gw, DEFAULT_COPIES);
+  gw_add_delay(default_gw, DEFAULT_DELAY);
+  gw_add_secret(default_gw, DEFAULT_SECRET);
 
   all_group = group_create("all");
 
@@ -1240,6 +1367,14 @@ main(int argc,
 	++f_debug;
 	break;
 		
+      case 'n':
+	f_no = !f_no;
+	break;
+		
+      case 'D':
+	++f_dump;
+	break;
+		
       case 'i':
 	++f_ignore;
 	break;
@@ -1251,6 +1386,15 @@ main(int argc,
 	}
 	if (cp)
 	  f_address = strdup(cp);
+	goto NextArg;
+
+      case 'g':
+	cp = argv[i]+j+1;
+	if (!*cp && i+1 < argc) {
+	  cp = argv[++i];
+	}
+	if (cp)
+	  f_gateway = strdup(cp);
 	goto NextArg;
 
       case 'p':
@@ -1289,7 +1433,7 @@ main(int argc,
 	  f_secret = strdup(cp);
 	goto NextArg;
 
-      case 'F':
+      case 'f':
 	cp = argv[i]+j+1;
 	if (!*cp && i+1 < argc) {
 	  cp = argv[++i];
@@ -1305,14 +1449,18 @@ main(int argc,
 	puts("  -h           Display this information");
 	puts("  -v           Increase verbosity");
 	puts("  -d           Increase debug level");
+	puts("  -D           Dump all configuration loaded");
 	puts("  -i           Ignore transmission errors");
-	puts("  -b           Enable broadcast mode");
-	puts("  -a <addr>    Target address");
-	puts("  -p <port>    Target port number");
-	puts("  -s <time>    Inter-packet delay");
-	puts("  -c <count>   Packet copies to send");
-	puts("  -S <secret>  WoL Secret (SecureOn MAC or IPv4)");
-	puts("  -F <path>    Configuration file");
+	puts("  -n           Toggle \"no\" mode - do not send wakeup packets");
+	puts("  -f <path>    Configuration file");
+	puts("  -g <name>    Force gateway");
+	puts("  -a <addr>    Force address");
+	puts("  -p <port>    Force port number");
+	puts("  -s <time>    Force inter-packet delay");
+	puts("  -c <count>   Force packet copies to send");
+	puts("  -S <secret>  Force WoL secret (SecureOn MAC or IPv4)");
+	puts("If no hosts/groups specified on the command line pwol will");
+	puts("read them from stdin");
 	exit(0);
 
       case '-':
@@ -1367,8 +1515,10 @@ main(int argc,
     }
   }
   
-  if (f_debug)
+  if (f_dump) {
     dump_all();
+    exit(0);
+  }
 
   if (i < argc) {
     for (;i < argc; i++) {

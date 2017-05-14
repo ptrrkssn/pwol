@@ -1,17 +1,17 @@
 # Makefile for pwol
 
+DEST=
 CC=gcc -Wall
 CFLAGS=-g -O -DVERSION="\"$(VERSION)\""
-
-DEST=
 
 PACKAGE=pwol
 VERSION=1.2
 
-BIN=pwol
-BINOBJS=pwol.o
+ETCDIR=$(DEST)/etc
+BINDIR=$(DEST)/bin
+MANDIR=$(DEST)/share/man
 
-MAN=pwol.1
+BINOBJS=pwol.o
 
 LIBS=
 
@@ -19,20 +19,20 @@ LIBS=
 #LIBS=-lnsl -lsocket
 
 
-all: $(BIN)
+all: pwol
 
-$(BIN): $(BINOBJS)
-	$(CC) -g -o $(BIN) $(BINOBJS) $(LIBS)
+pwol: $(BINOBJS)
+	$(CC) -g -o pwol $(BINOBJS) $(LIBS)
 
 clean:
-	-rm -f *~ core *.core *.o \#* $(BIN)
+	-rm -f *~ core *.core *.o \#* pwol
 
 distclean: clean
-	-rm -f $(LIB) $(BIN)
+	-rm -f pwol
 
-install: $(BIN)
-	$(INSTALL) -o root -g wheel -m 0444 $(BIN) $(DEST)/bin
-	$(INSTALL) -o root -g wheel -m 0444 $(MAN) $(DEST)/share/man/man1
+install: pwol
+	$(INSTALL) -o root -g wheel -m 0444 pwol $(BINDIR)
+	$(INSTALL) -o root -g wheel -m 0444 pwol.1 $(MANDIR)/man1
 
 push:	distclean
 	git commit -a && git push
