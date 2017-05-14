@@ -53,6 +53,7 @@
 #include <netinet/ether.h>
 #elif __FreeBSD__
 #include <net/ethernet.h>
+#define ether_addr_octet octet
 #else
 #include <sys/ethernet.h>
 #endif
@@ -88,11 +89,6 @@ char *argv0 = "pwol";
 char *version = VERSION;
 
 
-#if 0
-#ifndef ETH_ALEN
-#define ETH_ALEN 6
-#endif
-#endif
 
 
 
