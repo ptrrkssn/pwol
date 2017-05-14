@@ -38,11 +38,16 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdarg.h>
+#include <syslog.h>
+#include <signal.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <poll.h>
 
 #ifdef __linux__
 #include <netinet/ether.h>
@@ -59,13 +64,19 @@
 #define DEFAULT_HOSTGROUP_HOSTS 64
 
 #define DEFAULT_ADDRESS         "255.255.255.255"
-#define DEFAULT_SERVICE         "7"
+#define DEFAULT_PORT            "7"
 #define DEFAULT_COPIES          "1"
 #define DEFAULT_SECRET          NULL
 #define DEFAULT_DELAY           NULL
 
+#define DEFAULT_PROXY_ADDRESS   "0.0.0.0"
+#define DEFAULT_PROXY_PORT      "10007"
+
 #define HEADER_SIZE             6
 #define MAC_SIZE                6
+#define MAC_COPIES              16
+#define WOL_BODY_SIZE           (HEADER_SIZE+MAC_COPIES*MAC_SIZE)
+
 #define SECRET_MAX_SIZE         64
 
 
@@ -153,7 +164,9 @@ int f_verbose = 0;
 int f_ignore = 0;
 int f_debug = 0;
 int f_no = 0;
-int f_dump = 0;
+int f_export = 0;
+int f_daemon = 0;
+int f_foreground = 0;
 
 
 char *f_copies  = NULL;
@@ -161,10 +174,12 @@ char *f_delay   = NULL;
 char *f_secret  = NULL;
 
 char *f_address = NULL;
-char *f_service = NULL;
+char *f_port    = NULL;
 char *f_gateway = NULL;
 
-
+char *f_proxy_address = NULL;
+char *f_proxy_port = NULL;
+char *f_proxy_secret = NULL;
 
 char *
 strdupcat(const char *str,
@@ -238,21 +253,47 @@ target_free(TARGET *tp) {
 
 
 char *
-target2str(TARGET *tp) {
+sockaddr2str(struct sockaddr *sp,
+	     size_t len) {
   char addr[2048];
   char port[256];
 
 
-  if (!tp || !tp->aip)
+  if (!sp)
     return NULL;
 
-  if (getnameinfo(tp->aip->ai_addr, tp->aip->ai_addrlen, addr, sizeof(addr), port, sizeof(port), NI_DGRAM|NI_NUMERICHOST|NI_NUMERICSERV) != 0)
+  if (getnameinfo(sp, len, addr, sizeof(addr), port, sizeof(port), NI_DGRAM|NI_NUMERICHOST|NI_NUMERICSERV) != 0)
     return NULL;
 
-  if (tp->aip->ai_family == AF_INET6)
+  if (sp->sa_family == AF_INET6)
     return strdupcat("[", addr, "]:", port, NULL);
 
   return strdupcat(addr, ":", port, NULL);
+}
+
+
+char *
+addrinfo2str(struct addrinfo *aip) {
+  char addr[2048];
+  char port[256];
+
+
+  if (!aip)
+    return NULL;
+
+  if (getnameinfo(aip->ai_addr, aip->ai_addrlen, addr, sizeof(addr), port, sizeof(port), NI_DGRAM|NI_NUMERICHOST|NI_NUMERICSERV) != 0)
+    return NULL;
+
+  if (aip->ai_family == AF_INET6)
+    return strdupcat("[", addr, "]:", port, NULL);
+
+  return strdupcat(addr, ":", port, NULL);
+}
+
+
+char *
+target2str(TARGET *tp) {
+  return addrinfo2str(tp->aip);
 }
 
 
@@ -309,6 +350,24 @@ str2secret(const char *secret,
   return sp->size;
 }
 
+
+int
+secret_compare(SECRET *s1, 
+	       SECRET *s2) {
+  int rc;
+
+
+  if (!s1 && s2)
+    return 1;
+  if (s1 && !s2)
+    return -1;
+
+  rc = s1->size - s2->size;
+  if (rc)
+    return rc;
+
+  return memcmp(&s1->buf, &s2->buf, s1->size);
+}
 
 char *
 secret2str(SECRET *sp) {
@@ -437,7 +496,7 @@ gw_lookup(const char *name) {
   if (!name)
     return NULL;
 
-  for (gp = gateways; gp && strcmp(gp->name, name) != 0; gp = gp->next)
+  for (gp = gateways; gp && (!gp->name || strcmp(gp->name, name) != 0); gp = gp->next)
     ;
 
   if (!gp)
@@ -465,6 +524,9 @@ gw_add_address(GATEWAY *gp,
 	       const char *address) {
   if (!address)
     return -1;
+
+  if (gp->address)
+    free(gp->address);
 
   gp->address = strdup(address);
   return 0;
@@ -526,12 +588,11 @@ gw_create(const char *name) {
   GATEWAY *gp, **tgp;
 
 
-  if (!name)
-    return NULL;
-
-  gp = gw_lookup(name);
-  if (gp)
-    return gp;
+  if (name) {
+    gp = gw_lookup(name);
+    if (gp)
+      return gp;
+  }
 
   gp = malloc(sizeof(*gp));
   if (!gp)
@@ -539,31 +600,21 @@ gw_create(const char *name) {
 
   memset(gp, 0, sizeof(*gp));
 
-  gp->name = strdup(name);
 
-#if 0
-  if (default_gw) {
-    gp->address = default_gw->address;
-    gp->port    = default_gw->port;
-    gp->targets = default_gw->targets;
-
-    gp->copies  = default_gw->copies;
-    gp->delay   = default_gw->delay;
-    gp->secret  = default_gw->secret;
+  if (name) {
+    gp->name = strdup(name);
+  
+    /* Try to use gateway name as address */
+    (void) gw_add_address(gp, name);
+    
+    /* Autocreate group name */
+    (void) group_create(name);
   }
-#endif
-
-  /* Try to use gateway name as address */
-  (void) gw_add_address(gp, name);
-
-  /* Autocreate group name */
-  (void) group_create(name);
 
   for (tgp = &gateways; *tgp; tgp = &((*tgp)->next))
     ;
-
+  
   *tgp = gp;
-
   return gp;
 }
 
@@ -760,7 +811,7 @@ host_add_delay(HOST *hp,
 int
 host_add_copies(HOST *hp,
 		const char *copies) {
-  if (!copies && sscanf(copies, "%u", &hp->copies) != 1)
+  if (!copies || sscanf(copies, "%u", &hp->copies) != 1)
     return -1;
 
   return 0;
@@ -947,6 +998,7 @@ send_wol_host(HOST *hp) {
       return -1;
     }
   }
+  gp = hp->via;
   if (!gp)
     gp = default_gw;
   hp->via = gp;
@@ -985,7 +1037,7 @@ send_wol_host(HOST *hp) {
   if (sp->size == 0 && hp->via)
     sp = &hp->via->secret;
   
-  msg_size = HEADER_SIZE+16*MAC_SIZE;
+  msg_size = WOL_BODY_SIZE;
   if (sp)
     msg_size += sp->size;
 
@@ -995,7 +1047,7 @@ send_wol_host(HOST *hp) {
     
   memset(msg, 0xFF, MAC_SIZE);
 
-  for (i = 0; i < 16; i++)
+  for (i = 0; i < MAC_COPIES; i++)
     memcpy(msg+HEADER_SIZE+i*MAC_SIZE, &hp->mac, MAC_SIZE);
 
   if (sp)
@@ -1045,7 +1097,7 @@ send_wol_host(HOST *hp) {
 	char *dest;
 
 	dest = target2str(tp);
-	fprintf(stderr, "Sending packet #%u via %s\n", j+1, dest ? dest : "???");
+	fprintf(stderr, "Sending packet %u/%u via %s\n", j+1, copies, dest ? dest : "???");
       }
 
       if (!f_no) {
@@ -1145,7 +1197,7 @@ parse_config(const char *path) {
 
   gp = gw_lookup("default");
   gw_add_address(gp, DEFAULT_ADDRESS);
-  gw_add_port(gp, DEFAULT_SERVICE);
+  gw_add_port(gp, DEFAULT_PORT);
 
   if (f_debug > 1)
     fprintf(stderr, "[Parsing config: %s]\n", path);
@@ -1275,7 +1327,7 @@ parse_config(const char *path) {
 
 
 void
-dump_all(void) {
+export_all(void) {
   GATEWAY *gp;
   HOST *hp;
   HOSTGROUP *hgp;
@@ -1288,8 +1340,10 @@ dump_all(void) {
     puts("; Gateways:");
   }
   for (gp = gateways; gp; gp = gp->next) {
-    //    if (!f_verbose && strcmp(gp->name, "default") == 0)
-    //      continue;
+
+    if (!gp->name)
+      continue; /* Skip over anonymous gateways */
+
     gw_print(gp);
   }
 
@@ -1319,6 +1373,192 @@ dump_all(void) {
   }
 }
 
+
+int daemon_run(GATEWAY *gp) {
+  TARGET *tp;
+  struct addrinfo *aip;
+  int n, i;
+  struct pollfd *pfdv;
+  struct ether_addr *ep;
+  HOST *hp;
+
+
+  n = 0;
+  for (tp = gp->targets; tp; tp = tp->next)
+    ++n;
+
+  if (n == 0) {
+    errno = ENOENT;
+    if (f_debug)
+      fprintf(stderr, "*** daemon_run: No listening ports\n");
+    return -1;
+  }
+
+  pfdv = malloc(n * sizeof(struct pollfd *));
+  if (!pfdv)
+    return -1;
+
+  if (f_debug)
+    fprintf(stderr, "[Creating and binding daemon sockets]\n");
+
+  i = 0;
+  for (tp = gp->targets; tp; tp = tp->next) {
+    aip = tp->aip;
+    tp->fd = socket((aip->ai_family == AF_INET ? PF_INET : PF_INET6), SOCK_DGRAM, IPPROTO_UDP);
+    if (tp->fd < 0)
+      return -1;
+
+    if (bind(tp->fd, aip->ai_addr, aip->ai_addrlen) < 0)
+      return -2;
+
+    pfdv[i++].fd = tp->fd;
+  }
+
+  if (f_debug)
+    fprintf(stderr, "[Entering daemon main loop]\n");
+  
+  while (1) {
+    int i, rc;
+
+
+    for (i = 0; i < n; i++) {
+      pfdv[i].events = POLLIN;
+      pfdv[i].revents = 0;
+    }
+
+    do {
+      if (f_debug)
+	fprintf(stderr, "(Waiting for messages on %u FDs)\n", n);
+      rc = poll(&pfdv[0], n, -1);
+    } while (rc < 0 && errno == EINTR);
+
+    if (rc < 0)
+      return -1;
+
+    for (i = 0; i < n; i++) {
+      ssize_t rlen;
+      struct sockaddr_storage peer;
+      socklen_t peer_len;
+      unsigned char buf[2048];
+      size_t secret_size;
+
+
+      if (pfdv[i].revents & POLLIN) {
+	if (f_debug)
+	  fprintf(stderr, "[Data available on FD #%u]\n", pfdv[i].fd);
+
+	peer_len = sizeof(peer);
+	while ((rlen = recvfrom(pfdv[i].fd, buf, sizeof(buf), 0, (struct sockaddr *) &peer, &peer_len)) < 0 && errno == EINTR)
+	  ;
+	
+	if (rlen < 0)
+	  return -1;
+
+	if (f_debug)
+	  fprintf(stderr, "[Message on FD #%u received from %s]\n", pfdv[i].fd, sockaddr2str((struct sockaddr *) &peer, peer_len));
+
+	if (f_debug)
+	  buf_print(stderr, buf, rlen);
+
+	if (rlen < WOL_BODY_SIZE) {
+	  if (f_debug)
+	    fprintf(stderr, "*** Invalid WoL message (too short: %lu bytes)\n", rlen);
+	  continue;
+	}
+
+	for (i = 0; i < HEADER_SIZE && buf[i] == 0xFF; i++)
+	  ;
+	if (i < HEADER_SIZE) {
+	  if (f_debug)
+	    fprintf(stderr, "*** Invalid WoL message (invalid header)\n");
+	  continue;
+	}
+
+	for (i = 1; i < MAC_COPIES && memcmp(buf+HEADER_SIZE, buf+HEADER_SIZE+i*MAC_SIZE, MAC_SIZE) == 0; i++)
+	  ;
+	if (i < MAC_COPIES) {
+	  if (f_debug)
+	    fprintf(stderr, "*** Invalid WoL message (invalid MAC content copies)\n");
+	  continue;
+	}
+
+	secret_size = rlen-WOL_BODY_SIZE;
+	if (secret_size > 0) {
+	  SECRET secret;
+
+	  secret.size = secret_size;
+	  memcpy(secret.buf, buf+WOL_BODY_SIZE, secret_size);
+	  
+	  if (f_debug)
+	    fprintf(stderr, "*** Received secret: %s\n", secret2str(&secret));
+	  
+	  if (secret_compare(&gp->secret, &secret) != 0) {
+	    if (f_debug)
+	      fprintf(stderr, "*** Invalid received secret: %s\n", secret2str(&secret));
+	    continue;
+	  }
+	}
+
+	ep = (struct ether_addr *) (buf+HEADER_SIZE);
+	for (hp = hosts; hp && memcmp(ep, &hp->mac, MAC_SIZE) != 0; hp = hp->next)
+	  ;
+
+	if (!hp) {
+	  if (f_debug)
+	    fprintf(stderr, "*** Unknown MAC (no such host): %s\n", ether_ntoa(ep));
+	  continue;
+	}
+
+	printf("Got WoL for host: %s (%s)\n", hp->name, ether_ntoa(ep));
+	if (send_wol_host(hp) < 0) {
+	  if (f_debug)
+	    fprintf(stderr, "*** Error send WoL message to %s (%s)\n", hp->name, ether_ntoa(ep));
+	}
+      }
+    }
+  }
+}
+
+
+void
+become_daemon(void) {
+ 
+  pid_t pid;
+  int i, fd;
+
+
+  pid = fork();
+  if (pid < 0) {
+    syslog(LOG_ERR, "fork() failed: %m");
+    exit(EXIT_FAILURE);
+  }
+  else if (pid > 0)
+    exit(EXIT_SUCCESS);
+
+  signal(SIGTTOU, SIG_IGN);
+  signal(SIGTTIN, SIG_IGN);
+#ifdef SIGTTSP
+  signal(SIGTTSP, SIG_IGN);
+#endif
+
+#ifdef HAVE_SETSID
+  setsid();
+#endif
+
+  chdir("/");
+  umask(0);
+
+  fd = open("/dev/null", O_RDWR);
+
+  for (i = 0; i < 3; i++)
+    close(i);
+
+  dup2(fd, 0);
+  dup2(fd, 1);
+  dup2(fd, 2);
+}
+
+
 int
 main(int argc,
      char *argv[])
@@ -1327,7 +1567,7 @@ main(int argc,
   char *home_config = strdupcat(home, "/", DEFAULT_USER_CONFIG, NULL);
   char *cp;
   int i, j;
-  GATEWAY *gp;
+  GATEWAY *gp, *proxy_gp = NULL;
   TARGET *tp;
 
 
@@ -1341,7 +1581,7 @@ main(int argc,
     exit(1);
   }
   gw_add_address(default_gw, DEFAULT_ADDRESS);
-  gw_add_port(default_gw, DEFAULT_SERVICE);
+  gw_add_port(default_gw, DEFAULT_PORT);
   gw_add_copies(default_gw, DEFAULT_COPIES);
   gw_add_delay(default_gw, DEFAULT_DELAY);
   gw_add_secret(default_gw, DEFAULT_SECRET);
@@ -1371,14 +1611,22 @@ main(int argc,
 	f_no = !f_no;
 	break;
 		
-      case 'D':
-	++f_dump;
+      case 'e':
+	++f_export;
 	break;
 		
       case 'i':
 	++f_ignore;
 	break;
 		
+      case 'D':
+	++f_daemon;
+	break;
+
+      case 'F':
+	++f_foreground;
+	break;
+
       case 'a':
 	cp = argv[i]+j+1;
 	if (!*cp && i+1 < argc) {
@@ -1403,10 +1651,10 @@ main(int argc,
 	  cp = argv[++i];
 	}
 	if (cp)
-	  f_service = strdup(cp);
+	  f_port = strdup(cp);
 	goto NextArg;
 
-      case 's':
+      case 't':
 	cp = argv[i]+j+1;
 	if (!*cp && i+1 < argc) {
 	  cp = argv[++i];
@@ -1424,7 +1672,7 @@ main(int argc,
 	  f_copies = strdup(cp);
 	goto NextArg;
 		
-      case 'S':
+      case 's':
 	cp = argv[i]+j+1;
 	if (!*cp && i+1 < argc) {
 	  cp = argv[++i];
@@ -1442,6 +1690,40 @@ main(int argc,
 	  parse_config(cp);
 	goto NextArg;
 
+      case 'A':
+	cp = argv[i]+j+1;
+	if (!*cp && i+1 < argc) {
+	  cp = argv[++i];
+	}
+	if (cp) {
+	  f_proxy_address = strdup(cp);
+	}
+	goto NextArg;
+
+      case 'P':
+	cp = argv[i]+j+1;
+	if (!*cp && i+1 < argc) {
+	  cp = argv[++i];
+	}
+	if (cp) {
+	  if (!proxy_gp)
+	    proxy_gp = gw_create(NULL);
+	  gw_add_port(proxy_gp, cp);
+	  f_proxy_port = strdup(cp);
+	}
+	goto NextArg;
+
+      case 'S':
+	cp = argv[i]+j+1;
+	if (!*cp && i+1 < argc) {
+	  cp = argv[++i];
+	}
+	if (cp)
+	  f_proxy_secret = strdup(cp);
+	goto NextArg;
+
+
+
       case 'h':
 	printf("Usage: %s [<options>] [<host|group> [.. <host|group>]]\n",
 	       argv[0]);
@@ -1449,16 +1731,24 @@ main(int argc,
 	puts("  -h           Display this information");
 	puts("  -v           Increase verbosity");
 	puts("  -d           Increase debug level");
-	puts("  -D           Dump all configuration loaded");
-	puts("  -i           Ignore transmission errors");
-	puts("  -n           Toggle \"no\" mode - do not send wakeup packets");
+	puts("  -i           Ignore errors");
+	puts("  -n           Toggle \"no\" send mode");
+	puts("  -e           Export configuration");
 	puts("  -f <path>    Configuration file");
-	puts("  -g <name>    Force gateway");
-	puts("  -a <addr>    Force address");
-	puts("  -p <port>    Force port number");
-	puts("  -s <time>    Force inter-packet delay");
-	puts("  -c <count>   Force packet copies to send");
-	puts("  -S <secret>  Force WoL secret (SecureOn MAC or IPv4)");
+	puts("");
+	puts("  -g <name>    Destination gateway");
+	puts("  -a <addr>    Destination address");
+	puts("  -p <port>    Destination port");
+	puts("  -t <time>    Inter-packet delay time");
+	puts("  -c <count>   Packet copies to send");
+	puts("  -s <secret>  Force WoL secret");
+	puts("");
+	puts("  -D           Run as proxy daemon");
+	puts("  -F           Run proxy daemon in foreground");
+	puts("  -A <addr>    Proxy daemon listen address");
+	puts("  -P <port>    Proxy daemon listen port");
+	puts("  -S <secret>  Proxy daemon secret");
+	puts("");
 	puts("If no hosts/groups specified on the command line pwol will");
 	puts("read them from stdin");
 	exit(0);
@@ -1479,24 +1769,44 @@ main(int argc,
   if (f_verbose)
     header(stdout);
 
+  if (f_daemon) {
+    proxy_gp = gw_create(NULL);
+    gw_add_address(proxy_gp, f_proxy_address ? f_proxy_address : DEFAULT_PROXY_ADDRESS);
+    gw_add_port(proxy_gp, f_proxy_port ? f_proxy_port : DEFAULT_PROXY_PORT);
+    if (f_proxy_secret)
+      gw_add_secret(proxy_gp, f_proxy_secret);
+  }
+
   /* Open sockets for sending packets via the gateway targets */
   for (gp = gateways; gp; gp = gp->next) {
     struct addrinfo hints, *aip;
     int rc;
-
+    char *addr, *port;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_DGRAM;
     
     aip = NULL;
-    if ((rc = getaddrinfo(gp->address ? gp->address : DEFAULT_ADDRESS, gp->port ? gp->port : DEFAULT_SERVICE, &hints, &aip)) != 0) {
-      fprintf(stderr, "%s: %s port %s: Invalid target\n", argv[0], gp->address, gp->port);
+
+    addr = f_address;
+    if (!addr)
+      addr = gp->address;
+    if (!addr)
+      addr = DEFAULT_ADDRESS;
+
+    port = f_port;
+    if (!port)
+      port = gp->port;
+    if (!port)
+      port = DEFAULT_PORT;
+
+    if ((rc = getaddrinfo(addr, port, &hints, &aip)) != 0) {
+      fprintf(stderr, "%s: %s port %s: Invalid target\n", argv[0], addr, port);
       exit(1);
     }
 
     for (; aip; aip = aip->ai_next) {
       int one = 1;
-
 
       tp = target_add(&gp->targets, aip);
       if (!tp) {
@@ -1515,8 +1825,20 @@ main(int argc,
     }
   }
   
-  if (f_dump) {
-    dump_all();
+  if (f_export) {
+    export_all();
+    exit(0);
+  }
+
+  if (f_daemon) {
+    if (!f_foreground)
+      become_daemon();
+
+    if (daemon_run(proxy_gp) < 0) {
+      fprintf(stderr, "%s: daemon_run: %s\n", argv[0], strerror(errno));
+      exit(1);
+    }
+      
     exit(0);
   }
 
