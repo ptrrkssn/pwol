@@ -5,7 +5,7 @@
 pwol \- Send Wake-On-LAN (WoL) packets to wake-up hosts over the network
 
 .SH SYNOPSIS
-pwol [ options] [<host-1> [... <host-N>]]
+pwol [ options] [<host|group-1> [... <host|group-N>]]
 
 .SH "DESCRIPTION"
 .PP
@@ -20,13 +20,45 @@ http://https://github.com/ptrrkssn/pwol
 Show summary of options.
 .TP
 -v
-Be verbose.
+Increase verbosity level.
 .TP
 -V
-Print version.
+Print build version.
+.TP
+-i
+Ignore errors.
+.TP
+-n
+No-send mode.
+.TP
+-D
+Dump configuration.
 .TP
 -d
-Print internal debugging info.
+Increase internal debugging level.
+.TP
+-f <path>
+Load additional configuration files.
+.TP
+-g <name>
+Force (override) gateway.
+.TP
+-a <address>
+Force (override) gateway address (DNS name).
+.TP
+-p <service>
+Force (override) gateway port (service name).
+.TP
+-s <delay>
+Force (override) inter-packet delay.
+.TP
+-c <count>
+Force (override) packet copies for hosts/groups.
+.TP
+-S <secret>
+Force (override) WoL secret.
+.SH "DETAILS"
+Bla bla bla
 .SH "SEE ALSO"
 .PP
 ping (8)
