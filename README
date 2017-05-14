@@ -17,7 +17,7 @@ BSD standard license. See the file LICENSE for details.
 
 BUILD INSTRUCTIONS
 
-Edit 'Makefile' and run 'make'. Build has been tested on Solaris 10, Linux (CentOS 6) and FreeBSD 11.
+Edit 'Makefile' and run 'make'. Build has been tested on Solaris 10, OmniOS, Linux (CentOS 6) and FreeBSD 11.
 
 
 USAGE
