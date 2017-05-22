@@ -59,8 +59,8 @@
 #endif
 
 
-#define DEFAULT_GLOBAL_CONFIG   "/etc/pwol.conf"
-#define DEFAULT_USER_CONFIG     ".pwol.conf"
+#define DEFAULT_GLOBAL_CONFIG   "/ifm/etc/pwol.conf"
+#define DEFAULT_USER_CONFIG     ".pwolrc"
 
 #define DEFAULT_HOSTGROUP_HOSTS 64
 
@@ -885,6 +885,7 @@ host_print(HOST *hp) {
   if (f_verbose) {
     printf("Host %s:\n", hp->name);
     
+    printf("  %-10s  %s\n", "MAC", ether_ntoa(&hp->mac));
     if (hp->via)
       printf("  %-10s  %s\n", "Gateway", hp->via->name);
     if (hp->copies)
@@ -894,18 +895,17 @@ host_print(HOST *hp) {
     if (hp->secret.size > 0)
       printf("  %-10s  %s\n", "Secret", secret2str(&hp->secret));
   } else {
-    if (!hp->via || group_lookup(hp->via->name) == NULL) {
-      printf("host %s", hp->name);
-      if (hp->via)
-	printf(" via %s", hp->via->name);
-      if (hp->copies)
-	printf(" copies %u", hp->copies);
-      if (hp->delay.tv_sec || hp->delay.tv_nsec)
-	printf(" delay %s", timespec2str(&hp->delay));
-      if (hp->secret.size > 0)
-	printf(" secret %s", secret2str(&hp->secret));
-      putchar('\n');
-    }
+    printf("host %s", hp->name);
+    printf(" mac %s", ether_ntoa(&hp->mac));
+    if (hp->via && group_lookup(hp->via->name) == NULL)
+      printf(" via %s", hp->via->name);
+    if (hp->copies)
+      printf(" copies %u", hp->copies);
+    if (hp->delay.tv_sec || hp->delay.tv_nsec)
+      printf(" delay %s", timespec2str(&hp->delay));
+    if (hp->secret.size > 0)
+      printf(" secret %s", secret2str(&hp->secret));
+    putchar('\n');
   }
 }
 
@@ -930,6 +930,7 @@ group_print(HOSTGROUP *hgp) {
 
       printf("host %s", hp->name);
 
+#if 0
       if (!hp->via || (hp->via && strcmp(hp->via->name, hgp->name) == 0)) {
 	if (hp->copies)
 	  printf(" copies %u", hp->copies);
@@ -938,7 +939,8 @@ group_print(HOSTGROUP *hgp) {
 	if (hp->secret.size > 0)
 	  printf(" secret %s", secret2str(&hp->secret));
       }
-
+#endif
+      
       putchar('\n');
     }
   }
@@ -1011,8 +1013,9 @@ send_wol_host(HOST *hp) {
       errno = EINVAL;
       return -1;
     }
+  } else {
+      gp = hp->via;
   }
-  gp = hp->via;
   if (!gp)
     gp = default_gw;
   hp->via = gp;
@@ -1039,7 +1042,6 @@ send_wol_host(HOST *hp) {
   delay = hp->delay;
   if (delay.tv_sec == 0 && delay.tv_nsec == 0 && hp->via)
     delay = hp->via->delay;
-
 
   if (f_secret) {
     if (host_add_secret(hp, f_secret) < 0) {
@@ -1273,6 +1275,7 @@ parse_config(const char *path) {
 	continue;
       }
 
+      rc = 0;
       if (strcmp(key, "host") == 0) {
 	hp = host_create(val);
 	if (!hp) {
@@ -1803,8 +1806,7 @@ main(int argc,
 	puts("  -P <port>    Proxy daemon listen port");
 	puts("  -S <secret>  Proxy daemon secret");
 	puts("");
-	puts("If no hosts/groups specified on the command line pwol will");
-	puts("read them from stdin");
+	puts("If no hosts/groups specified on the command line pwol will read them from stdin");
 	exit(0);
 
       case '-':
