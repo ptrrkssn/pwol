@@ -5,7 +5,7 @@ CC=gcc -Wall
 CFLAGS=-g -O -DVERSION="\"$(VERSION)\""
 
 PACKAGE=pwol
-VERSION=1.4
+VERSION=1.4.1
 
 ETCDIR=$(DEST)/etc
 BINDIR=$(DEST)/bin
@@ -42,3 +42,4 @@ push:	distclean
 
 dist:	distclean
 	(mkdir -p ../dist && cd ../dist && ln -sf ../$(PACKAGE) $(PACKAGE)-$(VERSION) && tar zcf $(PACKAGE)-$(VERSION).tar.gz $(PACKAGE)-$(VERSION)/* && rm $(PACKAGE)-$(VERSION))
+

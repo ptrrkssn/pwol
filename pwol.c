@@ -1591,11 +1591,15 @@ become_daemon(void) {
   setsid();
 #endif
 
-  chdir("/");
+  if (chdir("/") < 0)
+    exit(EXIT_FAILURE);
+  
   umask(0);
 
   fd = open("/dev/null", O_RDWR);
-
+  if (fd < 0)
+    exit(EXIT_FAILURE);
+  
   for (i = 0; i < 3; i++)
     close(i);
 
