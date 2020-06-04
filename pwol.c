@@ -183,35 +183,33 @@ char *f_proxy_secret  = NULL;
 
 char *
 strdupcat(const char *str,
-	...) {
+	  ...) {
   va_list ap;
-  char *res, *tmp, *cp;
-  int size, len;
+  char *res, *cp;
+  int len;
 
-
-  va_start(ap, str);
 
   if (!str)
     return NULL;
 
-  size = len = strlen(str);
-  res = strdup(str);
+  len = strlen(str);
+  
+  va_start(ap, str);
+  while ((cp = va_arg(ap, char *)) != NULL)
+    len += strlen(cp);
+  va_end(ap);
+  
+  res = malloc(len+1);
   if (!res)
     return NULL;
 
-  while ((cp = va_arg(ap, char *)) != NULL) {
-    len = strlen(cp);
-    
-    tmp = realloc(res, size+len+1);
-    if (!tmp) {
-      free(res);
-      return NULL;
-    }
-    res = tmp;
-    strcpy(res+size, cp);
-    size += len;
-  }
+  strcpy(res, str);
+  
+  va_start(ap, str);
+  while ((cp = va_arg(ap, char *)) != NULL)
+    strcat(res, cp);
   va_end(ap);
+
   return res;
 }
 
@@ -623,6 +621,9 @@ gw_add_port(GATEWAY *gp,
   if (!port)
     return -1;
 
+  if (gp->port)
+    free(gp->port);
+  
   gp->port = strdup(port);
   return 0;
 }
@@ -857,7 +858,10 @@ gw_print(GATEWAY *gp) {
     i = 0;
     for (tp = gp->targets; tp; tp = tp->next) {
       char *dest = target2str(tp);
+      
       printf("    %-2u        %s\n", i+1, dest ? dest : "???");
+      if (dest)
+	free(dest);
       ++i;
     }
 
@@ -1105,23 +1109,28 @@ send_wol_host(HOST *hp) {
 	    fprintf(stderr, "(Sleeping %s more)\n", timespec2str(&delay));
 	}
 
-	if (rc < 0)
+	if (rc < 0) {
+	  free(msg);
 	  return -1;
+	}
       }
       
       if (f_debug) {
-	char *dest;
+	char *dest = target2str(tp);
 
-	dest = target2str(tp);
 	fprintf(stderr, "Sending packet %u/%u via %s\n", j+1, copies, dest ? dest : "???");
+	if (dest)
+	  free(dest);
       }
 
       if (!f_no) {
 	while ((rc = sendto(tp->fd, msg, msg_size, 0, aip->ai_addr, aip->ai_addrlen)) < 0 && errno == EINTR)
 	  ;
 	
-	if (rc < 0)
+	if (rc < 0) {
+	  free(msg);
 	  return -1;
+	}
       }
 
       if (f_verbose && !f_debug) {
@@ -1133,6 +1142,8 @@ send_wol_host(HOST *hp) {
     if (f_verbose && !f_debug)
       puts(" Done");
   }
+  
+  free(msg);
   return 0;
 }
 
@@ -1640,9 +1651,11 @@ main(int argc,
   all_group = group_create("all");
 
   parse_config(DEFAULT_GLOBAL_CONFIG);
-  if (home_config)
+  if (home_config) {
     parse_config(home_config);
-
+    free(home_config);
+  }
+  
   for (i = 1; i < argc && argv[i][0] == '-'; i++) {
     for (j = 1; argv[i][j]; j++)
       switch (argv[i][j]) {

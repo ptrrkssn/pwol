@@ -2,10 +2,10 @@
 
 DEST=
 CC=gcc -Wall
-CFLAGS=-g -O -DVERSION="\"$(VERSION)\""
+CFLAGS=-g -DVERSION="\"$(VERSION)\""
 
 PACKAGE=pwol
-VERSION=1.4.1
+VERSION=1.4.2
 
 ETCDIR=$(DEST)/etc
 BINDIR=$(DEST)/bin
