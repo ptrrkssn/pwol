@@ -17,6 +17,7 @@ DESTDIR =
 prefix =	@prefix@
 exec_prefix =	@exec_prefix@
 datarootdir =	@datarootdir@
+sysconfdir =    @sysconfdir@
 
 bindir =	@bindir@
 mandir =	@mandir@
@@ -31,7 +32,7 @@ TAR = 		tar
 PACKAGE =	@PACKAGE_TARNAME@
 VERSION =	@PACKAGE_VERSION@
 
-CPPFLAGS =	@CPPFLAGS@ -I. -I${srcdir}
+CPPFLAGS =	@CPPFLAGS@ -I. -I${srcdir} -DPATH_CONFIG="\"$(sysconfdir)/pwol.conf\""
 CFLAGS =	@CFLAGS@ -Wall
 LDFLAGS =	@LDFLAGS@
 LIBS =		@LIBS@

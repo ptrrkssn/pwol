@@ -61,7 +61,11 @@
 #endif
 
 
-#define DEFAULT_GLOBAL_CONFIG   "/etc/pwol.conf"
+#ifndef PATH_CONFIG
+#define PATH_CONFIG "/etc/pwol.conf"
+#endif
+
+#define DEFAULT_GLOBAL_CONFIG   PATH_CONFIG
 #define DEFAULT_USER_CONFIG     ".pwolrc"
 
 #define DEFAULT_HOSTGROUP_HOSTS 64
