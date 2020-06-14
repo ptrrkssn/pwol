@@ -2,7 +2,7 @@
 
 PORTNAME=		pwol
 DISTVERSIONPREFIX=	v
-DISTVERSION=		1.1
+DISTVERSION=		1.5
 CATEGORIES=		sysutils security
 
 MAINTAINER=		pen@lysator.liu.se

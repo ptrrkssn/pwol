@@ -1,4 +1,4 @@
-.TH "PWOL" "1" "14 Jun 2020" "1.1" "pwol man page"
+.TH "PWOL" "1" "14 Jun 2020" "1.5" "pwol man page"
 
 .SH "NAME"
 pwol \- Send Wake-On-LAN (WoL) packets to wake-up hosts over the network
@@ -6,7 +6,7 @@ pwol \- Send Wake-On-LAN (WoL) packets to wake-up hosts over the network
 .SH "SYNOPSIS"
 .B pwol
 .RI "[" "options" "]"
-.RI "[" "<host|group-1>" " [" "... <host|group-N>" "]]"
+.RI "[" "<hosts|groups>" "]"
 
 .SH "DESCRIPTION"
 .B pwol
@@ -16,6 +16,10 @@ in order to wake-up sleeping hosts, either directly or via routers.
 It can also be used as a WoL proxy daemon listening to incoming WoL
 packets (possibly authenticated) and then forwarding requests to one
 or many other targets.
+.PP
+If no hosts or groups are specified on the command line then
+.B pwol
+will read them from the command line.
 
 .SH "OPTIONS"
 .TP
