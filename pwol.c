@@ -42,9 +42,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdarg.h>
-#if HAVE_SYSLOG_H
-#include <syslog.h>
-#endif
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -54,6 +51,16 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <poll.h>
+
+#if HAVE_SYSLOG_H
+
+#include <syslog.h>
+
+#else
+
+#define syslog(fac,msg)
+
+#endif
 
 #if HAVE_NETINET_ETHER_H
 
