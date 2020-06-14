@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([pwol], [1.5.1], [pen@lysator.liu.se], [pwol], [https://github.com/ptrrkssn/pwol])
+AC_INIT([pwol], [1.5.2], [pen@lysator.liu.se], [pwol], [https://github.com/ptrrkssn/pwol])
 
 AC_CONFIG_SRCDIR([pwol.c])
 AC_CONFIG_HEADERS([config.h])
@@ -15,7 +15,6 @@ AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 
 # Checks for libraries.
-AC_CHECK_LIB([pthread], [pthread_create])
 AC_CHECK_LIB([socket], [connect])
 AC_CHECK_LIB([nsl], [gethostbyname])
 
