@@ -1,7 +1,7 @@
 /*
 ** pwol.c - Send Wake-On-LAN packets
 **
-** Copyright (c) 2017 Peter Eriksson <pen@lysator.liu.se>
+** Copyright (c) 2017-2020 Peter Eriksson <pen@lysator.liu.se>
 ** All rights reserved.
 ** 
 ** Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,8 @@
 ** OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include "config.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -59,7 +61,7 @@
 #endif
 
 
-#define DEFAULT_GLOBAL_CONFIG   "/ifm/etc/pwol.conf"
+#define DEFAULT_GLOBAL_CONFIG   "/etc/pwol.conf"
 #define DEFAULT_USER_CONFIG     ".pwolrc"
 
 #define DEFAULT_HOSTGROUP_HOSTS 64
@@ -81,12 +83,12 @@
 #define SECRET_MAX_SIZE         64
 
 
-#ifndef VERSION
-#define VERSION __DATE__ __TIME__
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION __DATE__ __TIME__
 #endif
 
 char *argv0 = "pwol";
-char *version = VERSION;
+char *version = PACKAGE_VERSION;
 
 
 
@@ -1932,8 +1934,8 @@ main(int argc,
     char lbuf[80], *lp, *lptr, *cp;
 
 	
-    if ((f_verbose || f_debug) && isatty(0)) {
-      fputs("Enter hosts or groups:\n", stderr);
+    if (isatty(fileno(stdin))) {
+      fputs("[Enter hosts or groups to send WoL packet to, end with EOF]\n", stderr);
       fflush(stderr);
     }
 

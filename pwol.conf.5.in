@@ -1,0 +1,134 @@
+.TH "PWOL.CONF" "5" "14 Jun 2020" "@PACKAGE_VERSION@" "pwol.conf man page"
+
+.SH "NAME"
+.TP
+.BR pwol.conf "\- Global configuration file for pwol"
+.TP
+.BR ~/.pwolrc "\- Per-user configuration file for pwol"
+
+.SH "DESCRIPTION"
+.B pwol is a command line utility to send Wake-On-LAN (WoL) packets to one or many hosts, either 
+locally or via routers, in order to wake them up from sleep mode. 
+.PP
+It can also be used as a WoL proxy daemon listening to incoming WoL packets (possibly authenticated) 
+and then forwarding requests to one or many other targets.
+.PP
+The configuration file(s) for
+.B pwol
+define global options, gateways (that forwards WoL packets), hosts (destinations
+for WoL packets) and host groups (preferably in that order).
+.PP
+For gateways and hosts can override the global options plus use a few local ones
+defined below. The gateway and host options may be specified on the same line or
+on following lines (until the next gateway/host or host group definitions are
+started).
+.PP
+Lines starting with ";" or "#" and empty lines are ignored.
+
+.SH "GLOBAL OPTIONS"
+.TP
+.BI copies " number"
+Set the number of WoL packets to send per host
+.TP
+.BI delay " time"
+Set the inter-packet delay.
+.TP
+.BI port " number"
+Set the destination UDP port to send WoL packets to.
+.TP
+.BI secret " ipv4|mac|text"
+Set the secret code to include in WoL packets
+
+.TP
+.BI gateway " name [sub-options]"
+Start a gateway definition
+.TP
+.BI host " name|mac [sub-options]"
+Start a host definition.
+.TP
+.BI "[" name "]"
+Start a host group section.
+
+.SH "GATEWAY OPTIONS"
+.TP
+.BI address " ipv4|ipv6|hostname"
+Set the ip address of the gateway. If not specified will try to use the gateway name
+as a host name to lookup up the address.
+
+.SH "HOST OPTIONS"
+.TP
+.BI mac " mac-address|hostname"
+Set the mac address of the host. If not specified will try to use the host name 
+to look up the mac address from /etc/ethers (if the system supports such lookups).
+.TP
+.BI name " text"
+Override the name of the host (if mac is specified as
+.BR name ")."
+.TP
+.BI via " gateway-name"
+Send packets to this host via the specified gateway.
+
+.SH "HOST GROUPS"
+Host groups are specified by a group name enclosed in "[" and "]" and then
+followed by a list of normal host declarations. As a short cut if a host is to
+be defined in multiple host groups then you do not need to re-specify all host
+sub-options and can just reference it via
+.BI host " name."
+Another shortcut is that if a group name equals the name of a gateway then that
+is used for each host in the group. 
+
+.SH "EXAMPLE"
+.nf
+; pwol.conf
+
+;; Global settings:
+copies 1
+delay 0.0s
+port 7
+
+
+;; Some gateways:
+gateway A 
+ address 10.0.0.255
+ port 1
+
+gateway B address b.wol.example.com
+gateway c.wol.example.com secret 1.2.3.4
+gateway D address 2001:0:1::1
+
+
+;; Some hosts:
+host test-1 mac fc:3f:db:04:1e:01 via A secret 1:2:3:4:5:6
+host test-2 
+  mac fc:3f:db:04:1e:02 
+   secret hello7
+
+
+;; Host group using gateway "B"
+[B]
+:; These hosts need a longer inter-host delay
+delay 1s 
+
+host test-3 mac b8:ac:6f:1f:68:03 delay 100ns
+host test-4    mac 00:1b:78:9b:c6:04 secret 1.2.3.4
+host 00:11:22:33:44:55
+host 00:11:22:33:44:ff name test-6
+
+;; Only works if hosts are defined in /etc/ethers
+host test-7   mac test-7.example.com  copies 2 delay 1s
+host test-8.example.com
+
+
+;; Standalone host group:
+[MyGroup]
+host test-3
+host test-6
+.fi
+
+.SH "SEE ALSO"
+.BR pwol (1),
+.BR ping (8),
+.B "https://github.com/ptrrkssn/pwol"
+
+.SH "AUTHOR"
+pwol was written by Peter Eriksson <pen@lysator.liu.se>.
