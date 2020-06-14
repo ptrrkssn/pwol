@@ -6,6 +6,9 @@
 /* Define to 1 if you have the `dup2' function. */
 #undef HAVE_DUP2
 
+/* Define to 1 if you have the `ether_hostton' function. */
+#undef HAVE_ETHER_HOSTTON
+
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
 
@@ -37,8 +40,14 @@
 /* Define to 1 if you have the <netdb.h> header file. */
 #undef HAVE_NETDB_H
 
+/* Define to 1 if you have the <netinet/ether.h> header file. */
+#undef HAVE_NETINET_ETHER_H
+
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
+
+/* Define to 1 if you have the <net/ethernet.h> header file. */
+#undef HAVE_NET_ETHERNET_H
 
 /* Define to 1 if your system has a GNU libc compatible `realloc' function,
    and to 0 otherwise. */
@@ -70,6 +79,9 @@
 
 /* Define to 1 if you have the <syslog.h> header file. */
 #undef HAVE_SYSLOG_H
+
+/* Define to 1 if you have the <sys/ethernet.h> header file. */
+#undef HAVE_SYS_ETHERNET_H
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
 #undef HAVE_SYS_SOCKET_H

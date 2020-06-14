@@ -51,13 +51,22 @@
 #include <netdb.h>
 #include <poll.h>
 
-#ifdef __linux__
+#if HAVE_NETINET_ETHER_H
+
+/* Linux */
 #include <netinet/ether.h>
-#elif __FreeBSD__
+
+#elif HAVE_NET_ETHERNET_H
+
+/* FreeBSD & MacOS */
 #include <net/ethernet.h>
 #define ether_addr_octet octet
-#else
+
+#elif HAVE_SYS_ETHERNET_H
+
+/* Solaris */
 #include <sys/ethernet.h>
+
 #endif
 
 
@@ -688,17 +697,19 @@ host_add_mac(HOST *hp,
   if (!mac)
     return -1;
 
+#if HAVE_ETHER_HOSTTON
   if (ether_hostton(mac, &hp->mac) == 0)
     return 0;
+#endif
 
   ep = ether_aton(mac);
-  if (!ep) {
-    errno = EINVAL;
-    return -1;
+  if (ep) {
+    hp->mac = *ep;
+    return 0;
   }
-
-  hp->mac = *ep;
-  return 0;
+  
+  errno = EINVAL;
+  return -1;
 }
 
 
