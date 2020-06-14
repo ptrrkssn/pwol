@@ -76,7 +76,7 @@ pull:
 
 
 # Install targets
-install-all install:  install-bin install-man
+install-all install:  install-bin install-man install-conf
 
 install-bin: $(BINS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
@@ -84,11 +84,14 @@ install-bin: $(BINS)
 
 install-man:  pwol.1 pwol.conf.5
 	$(INSTALL) -d "$(DESTDIR)$(man1dir)"
-	$(INSTALL) -c pwol.1 "$(DESTDIR)$(man1dir)" && \
+	$(INSTALL) -c -m 644 pwol.1 "$(DESTDIR)$(man1dir)" && \
 	  gzip -f "$(DESTDIR)$(man1dir)/pwol.1"
 	$(INSTALL) -d "$(DESTDIR)$(man5dir)"
-	$(INSTALL) -c pwol.conf.5 "$(DESTDIR)$(man5dir)" && \
+	$(INSTALL) -c -m 644 pwol.conf.5 "$(DESTDIR)$(man5dir)" && \
 	  gzip -f "$(DESTDIR)$(man5dir)/pwol.conf.5"
+
+install-conf: pwol.conf
+	$(INSTALL) -c -m 644 pwol.conf "$(DESTDIR)$(sysconfdir)/pwol.conf.sample"
 
 
 uninstall-all uninstall: uninstall-bin uninstall-man
@@ -99,6 +102,7 @@ uninstall-bin:
 uninstall-man:
 	rm -f "$(DESTDIR)$(man1dir)/pwol.1.gz" "$(DESTDIR)$(man1dir)/pwol.1"
 	rm -f "$(DESTDIR)$(man5dir)/pwol.conf.5.gz" "$(DESTDIR)$(man5dir)/pwol.conf.5"
+	rm -f "$(DESTDIR)$(sysconfdir)/pwol.conf.sample"
 
 
 # Check targets
