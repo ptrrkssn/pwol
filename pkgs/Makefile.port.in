@@ -16,9 +16,4 @@ GH_ACCOUNT=		ptrrkssn
 
 GNU_CONFIGURE=		yes
 
-PLIST_FILES=		bin/pwol \
-			man/man1/pwol.1.gz \
-			man/man5/pwol.conf.5.gz \
-			etc/pwol.conf.sample
-
 .include <bsd.port.mk>
