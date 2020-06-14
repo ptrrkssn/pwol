@@ -7,7 +7,7 @@ AC_INIT([pwol], [1.5.2], [pen@lysator.liu.se], [pwol], [https://github.com/ptrrk
 AC_CONFIG_SRCDIR([pwol.c])
 AC_CONFIG_HEADERS([config.h])
 
-AC_CONFIG_AUX_DIR([aux])
+AC_CONFIG_AUX_DIR([build-aux])
 
 # Checks for programs.
 AC_PROG_CC
