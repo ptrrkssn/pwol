@@ -1802,7 +1802,6 @@ main(int argc,
 	goto NextArg;
 
 
-
       case 'h':
 	printf("Usage: %s [<options>] [<host|group> [.. <host|group>]]\n",
 	       argv[0]);

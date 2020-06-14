@@ -26,32 +26,33 @@ will read them from the command line.
 .B \-h
 Show summary of options.
 .TP
-.B \-v
-Increase verbosity level.
-.TP
 .B \-V
 Print build version.
+.TP
+.B \-v
+Increase verbosity level.
 .TP
 .B \-i
 Ignore errors.
 .TP
-.B \-n
-No-send mode (dry run).
-.TP
-.B \-D
-Dump configuration.
-.TP
 .B \-d
 Increase internal debugging level.
 .TP
+.B \-n
+No-send mode (dry run).
+.TP
+.B \-e
+Export configuration.
+.TP
 .BI \-f " path"
 Load additional configuration files.
+.PP
 .TP
 .BI \-g " name"
 Force (override) gateway.
 .TP
 .BI \-a " address"
-Force (override) gateway address (DNS name).
+Force (override) destination address (DNS name).
 .TP
 .BI \-p " service"
 Force (override) gateway port (service name).
@@ -65,8 +66,24 @@ Force (override) inter-host delay.
 .BI \-c " count"
 Force (override) packet copies for hosts/groups.
 .TP
-.BI \-S " secret"
+.BI \-s " secret"
 Force (override) WoL secret.
+.PP
+.TP
+.B \-D
+Enable proxy daemon mode
+.TP
+.B \-F
+Run proxy in the foreground
+.TP
+.BI \-A " address"
+Force (override) proxy address (DNS name).
+.TP
+.BI \-P " service"
+Force (override) proxy port.
+.TP
+.BI \-S " secret"
+Force (override) proxy secret.
 
 .SH "SEE ALSO"
 .BR pwol.conf (5),
