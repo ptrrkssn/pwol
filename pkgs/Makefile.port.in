@@ -3,7 +3,7 @@
 PORTNAME=		@PACKAGE_TARNAME@
 DISTVERSIONPREFIX=	v
 DISTVERSION=		@PACKAGE_VERSION@
-CATEGORIES=		sysutils security
+CATEGORIES=		sysutils
 
 MAINTAINER=		@PACKAGE_BUGREPORT@
 COMMENT=		Peter's Wake-on-LAN Tool
@@ -17,7 +17,7 @@ GH_ACCOUNT=		ptrrkssn
 GNU_CONFIGURE=		yes
 
 PLIST_FILES=		bin/pwol \
-			man/man1/pwol.1.gz
+			man/man1/pwol.1.gz \
 			man/man5/pwol.conf.5.gz
 
 .include <bsd.port.mk>
