@@ -53,13 +53,7 @@
 #include <poll.h>
 
 #if HAVE_SYSLOG_H
-
 #include <syslog.h>
-
-#else
-
-#define syslog(fac,msg)
-
 #endif
 
 #if HAVE_NETINET_ETHER_H
