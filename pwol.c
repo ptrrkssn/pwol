@@ -36,7 +36,9 @@
 #include <errno.h>
 #include <string.h>
 #include <ctype.h>
+#if HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <stdlib.h>
 #include <time.h>
 #include <stdarg.h>
