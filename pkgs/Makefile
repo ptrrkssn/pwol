@@ -31,10 +31,13 @@ brew: brew-install-formulae brew-install
 brew-install: "$(BREWDIR)/$(PACKAGE).rb"
 	  (brew install $(PACKAGE) || brew upgrade $(PACKAGE) || brew reinstall $(PACKAGE))
 
-brew-install-formulae: $(PACKAGE).rb
-	$(INSTALL) -m 0644 $(PACKAGE).rb "$(BREWDIR)"
+brew-install-formulae: $(BREWDIR)/$(PACKAGE).rb
 
-brew-create-formulae: "$(BREWDIR)/$(PACKAGE).rb"
+$(BREWDIR)/$(PACKAGE).rb: $(PACKAGE).rb
+	$(INSTALL) -m 0644 $(PACKAGE).rb $(BREWDIR)
+
+# Alternative way to create the formulae
+brew-create-formulae:
 	brew create https://github.com/ptrrkssn/$(PACKAGE)/archive/v$(VERSION).tar.gz
 	brew edit $(PACKAGE)
 
