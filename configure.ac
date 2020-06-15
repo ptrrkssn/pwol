@@ -32,5 +32,5 @@ AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([dup2 memset socket strchr strdup strerror ether_hostton])
 
-AC_CONFIG_FILES([Makefile pwol.1 pwol.conf.5 pkgs/Makefile.port])
+AC_CONFIG_FILES([Makefile pwol.1 pwol.conf.5 pkgs/Makefile pkgs/Makefile.port pkgs/pwol.rb])
 AC_OUTPUT
