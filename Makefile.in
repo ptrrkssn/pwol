@@ -106,8 +106,8 @@ uninstall-man:
 
 
 # Check targets
-check:
-	@echo "Nothing to check for now."
+check:	pwol
+	./pwol -v 00:01:02:03:04:05
 
 
 DISTCHECKDIR=/tmp/distcheck-$(PACKAGE)-$(VERSION)
