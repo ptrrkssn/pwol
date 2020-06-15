@@ -1,6 +1,6 @@
 # Documentation: https://docs.brew.sh/Formula-Cookbook
 #                https://rubydoc.brew.sh/Formula
-class Acltool < Formula
+class Pwol < Formula
   desc "A tool to send Wake-on-LAN packets to wake-up computers"
   homepage "@PACKAGE_URL@"
   url "@PACKAGE_URL@/archive/v@PACKAGE_VERSION@.tar.gz"

@@ -91,6 +91,7 @@ install-man:  pwol.1 pwol.conf.5
 	  gzip -f "$(DESTDIR)$(man5dir)/pwol.conf.5"
 
 install-conf: pwol.conf
+	$(INSTALL) -d "$(DESTDIR)$(sysconfdir)"
 	$(INSTALL) -m 644 pwol.conf "$(DESTDIR)$(sysconfdir)/pwol.conf.sample"
 
 

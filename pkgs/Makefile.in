@@ -6,6 +6,7 @@ PORTSDIR =	/usr/ports
 PORTSNAME =	sysutils/pwol
 BREWDIR =	/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula
 INSTALL =	@INSTALL@
+@SET_MAKE@
 
 all:
 	@echo "Valid targets: 'port' (FreeBSD) or 'brew' (MacOS Homebrew)"
@@ -24,16 +25,12 @@ port-install: port
 
 #
 
-brew: brew-install-formulae brew-install
-	(cd ../.. && $(MAKE) dist && \
-	    cp "$(PACKAGE)-$(VERSION).tar.gz" "`brew --cache $(PACKAGE)`") && \
+brew: brew-install-formulae brew-install-dist
 
-brew-install: "$(BREWDIR)/$(PACKAGE).rb"
+brew-install: brew
 	  (brew install $(PACKAGE) || brew upgrade $(PACKAGE) || brew reinstall $(PACKAGE))
 
-brew-install-formulae: $(BREWDIR)/$(PACKAGE).rb
-
-$(BREWDIR)/$(PACKAGE).rb: $(PACKAGE).rb
+brew-install-formulae: $(PACKAGE).rb
 	$(INSTALL) -m 0644 $(PACKAGE).rb $(BREWDIR)
 
 # Alternative way to create the formulae
@@ -41,6 +38,8 @@ brew-create-formulae:
 	brew create https://github.com/ptrrkssn/$(PACKAGE)/archive/v$(VERSION).tar.gz
 	brew edit $(PACKAGE)
 
+brew-install-dist:
+	(cd .. && $(MAKE) dist && cp "$(PACKAGE)-$(VERSION).tar.gz" "`brew --cache $(PACKAGE)`")
 
 
 # Clean targets

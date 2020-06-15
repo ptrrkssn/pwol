@@ -1,14 +1,14 @@
 # Documentation: https://docs.brew.sh/Formula-Cookbook
 #                https://rubydoc.brew.sh/Formula
-class Acltool < Formula
+class Pwol < Formula
   desc "A tool to send Wake-on-LAN packets to wake-up computers"
   homepage "https://github.com/ptrrkssn/pwol"
   url "https://github.com/ptrrkssn/pwol/archive/v1.5.2.tar.gz"
 
-  ## This line must be uncommented and updated with the correct hash value
+  ## This line must be uncommented and updated with the correct hash value.
   ## The correct value will be displayed when doing 'brew install pwol'
-  # sha256 "15430b64cb493571f6e46a38482402746bee7ed134c0e99d7976d231cab1c7d5"
-
+  # sha256 "f75e6c66d31eb147ea5cf319d851705fdd6d68d7ac25b17f942f4b37a7150fe3"
+  
   def install
     system "./configure", "--prefix=#{prefix}"
     system "make install"
