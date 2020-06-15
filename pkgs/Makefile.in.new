@@ -5,7 +5,6 @@ VERSION =	@PACKAGE_VERSION@
 PORTSDIR =	/usr/ports
 PORTSNAME =	sysutils/pwol
 BREWDIR =	/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula
-INSTALL =	@INSTALL@
 
 all:
 	@echo "Valid targets: 'port' (FreeBSD) or 'brew' (MacOS Homebrew)"
