@@ -56,6 +56,7 @@ svr solaris:
 	mkdir -p "$(TMPDESTDIR)" && (cd .. && make DESTDIR="$(TMPDESTDIR)" install)
 	(echo "i pkginfo"; (cd "$(TMPDESTDIR)$(PREFIX)" && find . -print | pkgproto | awk '{print $$1, $$2, $$3, $$4, "root", "root"}' )) >$(TMPBUILDDIR)/prototype
 	mkdir -p $(TMPPKGDIR)
+	cp pkginfo $(TMPBUILDDIR)
 	pkgmk -o -a "`uname -p`" -r $(TMPDESTDIR)$(PREFIX) -d $(TMPPKGDIR) -f $(TMPBUILDDIR)/prototype
 	pkgtrans -s $(TMPPKGDIR) `pwd`/$(PKGNAME).pkg $(PKGNAME)
 	rm -fr "$(TMPBUILDDIR)"
@@ -68,7 +69,7 @@ svr-install: svr
 maintainer-clean:	distclean
 
 distclean:		clean
-	rm -fr Makefile.port
+	rm -fr Makefile.port LYS$(PACKAGE).pkg pkginfo $(PACKAGE).rb Makefile
 
 clean mostlyclean:
 	-rm -f *~ \#*
