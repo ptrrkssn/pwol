@@ -36,11 +36,12 @@
 #include <errno.h>
 #include <string.h>
 #include <ctype.h>
+#if HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <stdlib.h>
 #include <time.h>
 #include <stdarg.h>
-#include <syslog.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -50,6 +51,10 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <poll.h>
+
+#if HAVE_SYSLOG_H
+#include <syslog.h>
+#endif
 
 #if HAVE_NETINET_ETHER_H
 
