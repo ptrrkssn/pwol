@@ -4,13 +4,14 @@ PREFIX =	/usr/local
 PACKAGE =	pwol
 VERSION =	1.5.2
 PORTSDIR =	/usr/ports
-PORTSNAME =	sysutils/pwol
+PORTSNAME =	sysutils/$(PACKAGE)
 BREWDIR =	/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula
 
-PKGNAME =	LYSpwol
-TMPBUILDDIR =	/var/tmp/pkg-build-pwol
-TMPDESTDIR =	$(TMPBUILDDIR)/root
-TMPPKGDIR =	$(TMPBUILDDIR)/pkg
+PKGPREFIX =     LYS
+PKGNAME =	$(PKGPREFIX)$(PACKAGE)
+TMPINSTDIR =	/var/tmp/pkg-build-$(PACKAGE)
+TMPDESTDIR =	$(TMPINSTDIR)/root
+TMPPKGDIR =	$(TMPINSTDIR)/pkg
 
 INSTALL =	/usr/bin/install -c
 
@@ -54,12 +55,12 @@ brew-install-dist:
 
 svr solaris:
 	mkdir -p "$(TMPDESTDIR)" && (cd .. && make DESTDIR="$(TMPDESTDIR)" install)
-	(echo "i pkginfo"; (cd "$(TMPDESTDIR)$(PREFIX)" && find . -print | pkgproto | awk '{print $$1, $$2, $$3, $$4, "root", "root"}' )) >$(TMPBUILDDIR)/prototype
+	(echo "i pkginfo"; (cd "$(TMPDESTDIR)$(PREFIX)" && find . -print | pkgproto | awk '{print $$1, $$2, $$3, $$4, "root", "root"}' )) >$(TMPINSTDIR)/prototype
 	mkdir -p $(TMPPKGDIR)
-	cp pkginfo $(TMPBUILDDIR)
-	pkgmk -o -a "`uname -p`" -r $(TMPDESTDIR)$(PREFIX) -d $(TMPPKGDIR) -f $(TMPBUILDDIR)/prototype
+	cp pkginfo $(TMPINSTDIR)
+	pkgmk -o -a "`uname -p`" -r $(TMPDESTDIR)$(PREFIX) -d $(TMPPKGDIR) -f $(TMPINSTDIR)/prototype
 	pkgtrans -s $(TMPPKGDIR) `pwd`/$(PKGNAME).pkg $(PKGNAME)
-	rm -fr "$(TMPBUILDDIR)"
+	rm -fr "$(TMPINSTDIR)"
 
 svr-install: svr
 	pkgadd -d ./$(PKGNAME).pkg $(PKGNAME)
@@ -70,6 +71,7 @@ maintainer-clean:	distclean
 
 distclean:		clean
 	rm -fr Makefile.port LYS$(PACKAGE).pkg pkginfo $(PACKAGE).rb Makefile
+	rm -fr "$(TMPINSTDIR)"
 
 clean mostlyclean:
 	-rm -f *~ \#*
