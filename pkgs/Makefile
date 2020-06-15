@@ -1,10 +1,17 @@
 # Makefile for pkgs
 
+PREFIX =	/usr/local
 PACKAGE =	pwol
 VERSION =	1.5.2
 PORTSDIR =	/usr/ports
 PORTSNAME =	sysutils/pwol
 BREWDIR =	/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula
+
+PKGNAME =	LYSpwol
+TMPBUILDDIR =	/var/tmp/pkg-build-pwol
+TMPDESTDIR =	$(TMPBUILDDIR)/root
+TMPPKGDIR =	$(TMPBUILDDIR)/pkg
+
 INSTALL =	/usr/bin/install -c
 
 
@@ -12,7 +19,7 @@ all:
 	@echo "Valid targets: 'port' (FreeBSD) or 'brew' (MacOS Homebrew)"
 	@exit 1
 
-#
+## FreeBSD Ports package:
 
 port:	Makefile.port pkg-descr pkg-plist
 	mkdir -p "$(PORTSDIR)/$(PORTSNAME)"
@@ -23,7 +30,8 @@ port:	Makefile.port pkg-descr pkg-plist
 port-install: port
 	(cd "$(PORTSDIR)/$(PORTSNAME)" && make install)
 
-#
+
+## MacOS HomeBrew package:
 
 brew: brew-install-formulae brew-install-dist
 
@@ -40,6 +48,20 @@ brew-create-formulae:
 
 brew-install-dist:
 	(cd .. && $(MAKE) dist && cp "$(PACKAGE)-$(VERSION).tar.gz" "`brew --cache $(PACKAGE)`")
+
+
+## SVR (Solaris) package:
+
+svr solaris:
+	mkdir -p "$(TMPDESTDIR)" && (cd .. && make DESTDIR="$(TMPDESTDIR)" install)
+	(echo "i pkginfo"; (cd "$(TMPDESTDIR)$(PREFIX)" && find . -print | pkgproto | awk '{print $$1, $$2, $$3, $$4, "root", "root"}' )) >prototype
+	mkdir -p $(TMPPKGDIR)
+	pkgmk -o -a "`uname -p`" -r $(TMPDESTDIR)$(PREFIX) -d $(TMPPKGDIR) -f prototype
+	pkgtrans -s $(TMPPKGDIR) `pwd`/$(PKGNAME).pkg $(PKGNAME)
+	rm -fr "$(TMPBUILDDIR)"
+
+svr-install: svr
+	pkgadd -d ./$(PKGNAME).pkg $(PKGNAME)
 
 
 # Clean targets
