@@ -54,9 +54,9 @@ brew-install-dist:
 
 svr solaris:
 	mkdir -p "$(TMPDESTDIR)" && (cd .. && make DESTDIR="$(TMPDESTDIR)" install)
-	(echo "i pkginfo"; (cd "$(TMPDESTDIR)$(PREFIX)" && find . -print | pkgproto | awk '{print $$1, $$2, $$3, $$4, "root", "root"}' )) >prototype
+	(echo "i pkginfo"; (cd "$(TMPDESTDIR)$(PREFIX)" && find . -print | pkgproto | awk '{print $$1, $$2, $$3, $$4, "root", "root"}' )) >$(TMPBUILDDIR)/prototype
 	mkdir -p $(TMPPKGDIR)
-	pkgmk -o -a "`uname -p`" -r $(TMPDESTDIR)$(PREFIX) -d $(TMPPKGDIR) -f prototype
+	pkgmk -o -a "`uname -p`" -r $(TMPDESTDIR)$(PREFIX) -d $(TMPPKGDIR) -f $(TMPBUILDDIR)/prototype
 	pkgtrans -s $(TMPPKGDIR) `pwd`/$(PKGNAME).pkg $(PKGNAME)
 	rm -fr "$(TMPBUILDDIR)"
 
