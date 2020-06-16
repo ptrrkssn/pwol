@@ -7,12 +7,9 @@
 .c.o:
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
-@SET_MAKE@
-
+DESTDIR =
 srcdir =	@srcdir@
 VPATH =		@srcdir@
-
-DESTDIR =
 
 prefix =	@prefix@
 exec_prefix =	@exec_prefix@
@@ -28,6 +25,7 @@ man8dir =	${mandir}/man8
 CC =		@CC@
 INSTALL =	@INSTALL@
 TAR = 		tar
+@SET_MAKE@
 
 PACKAGE =	@PACKAGE_TARNAME@
 VERSION =	@PACKAGE_VERSION@
@@ -40,6 +38,9 @@ LIBS =		@LIBS@
 VALGRIND =	valgrind
 VALGRINDFLAGS =	--leak-check=full --track-origins=yes --error-exitcode=1 # --show-leak-kinds=all 
 
+DISTCHECKDIR =	/tmp/distcheck-$(PACKAGE)-$(VERSION)
+DISTDIR =	/tmp/build-$(PACKAGE)-$(VERSION)
+
 BINS =		pwol
 OBJS =		pwol.o
 
@@ -51,16 +52,17 @@ Makefile: Makefile.in config.status
 config.h: config.h.in config.status
 	./config.status
 
-pwol.o: 	pwol.c
-
 pwol: $(OBJS)
 	$(CC) $(LDFLAGS) -o pwol $(OBJS) $(LIBS)
 
+pwol.o: 	pwol.c
+
+
 # Clean targets
-maintainer-clean:	distclean
+maintainer-clean: distclean
 	rm -f configure config.h.in
 
-distclean:		clean
+distclean: clean
 	rm -fr config.status config.log stamp-h1 .deps autom4te.cache Makefile config.h *.tar.gz
 	(cd pkgs && $(MAKE) distclean)
 
@@ -69,7 +71,7 @@ clean mostlyclean:
 
 
 # Git targets
-push: 	distclean
+push: distclean
 	git add -A && git commit -a && git push
 
 pull:
@@ -79,11 +81,17 @@ pull:
 # Install targets
 install install-all: install-bin install-man install-conf
 
-install-bin install-strip: $(BINS)
+install-strip: install-bin-strip install-man install-conf
+
+install-bin: $(BINS)
+	$(INSTALL) -d $(DESTDIR)$(bindir)
+	$(INSTALL) $(BINS) $(DESTDIR)$(bindir)
+
+install-strip: $(BINS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
 	$(INSTALL) -s $(BINS) $(DESTDIR)$(bindir)
 
-install-man:  pwol.1 pwol.conf.5
+install-man: pwol.1 pwol.conf.5
 	$(INSTALL) -d "$(DESTDIR)$(man1dir)"
 	$(INSTALL) -m 644 pwol.1 "$(DESTDIR)$(man1dir)" && \
 	  gzip -f "$(DESTDIR)$(man1dir)/pwol.1"
@@ -111,9 +119,6 @@ uninstall-man:
 check:	pwol
 	./pwol -v 00:01:02:03:04:05
 
-
-DISTCHECKDIR=/tmp/distcheck-$(PACKAGE)-$(VERSION)
-
 distcheck: $(PACKAGE)-$(VERSION).tar.gz
 	@if test -d "$(DISTCHECKDIR)"; then \
 	  chmod -R +w "$(DISTCHECKDIR)" && rm -fr "$(DISTCHECKDIR)"; \
@@ -125,9 +130,6 @@ distcheck: $(PACKAGE)-$(VERSION).tar.gz
 	     mkdir b && cd b && ../$(PACKAGE)-$(VERSION)/configure && \
 	     $(MAKE) && $(MAKE) -s check) && echo "*** distcheck: OK"
 	@chmod -R +w "$(DISTCHECKDIR)" && rm -fr "$(DISTCHECKDIR)";
-
-
-DISTDIR=/tmp/build-$(PACKAGE)-$(VERSION)
 
 dist:	$(PACKAGE)-$(VERSION).tar.gz
 
