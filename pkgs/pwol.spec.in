@@ -34,6 +34,7 @@ make DESTDIR="$RPM_BUILD_ROOT" install
 %defattr(-,root,root)
 %{_bindir}/pwol
 %{_mandir}/man1/pwol.1.gz
-%{_etcdir}/pwol.conf.sample
+%{_mandir}/man5/pwol.conf.5.gz
+/etc/pwol.conf.sample
 
 %changelog
