@@ -3813,7 +3813,7 @@ fi
 done
 
 
-ac_config_files="$ac_config_files Makefile pwol.1 pwol.conf.5 pkgs/Makefile pkgs/Makefile.port pkgs/pwol.rb pkgs/pkginfo"
+ac_config_files="$ac_config_files Makefile pwol.1 pwol.conf.5 pkgs/Makefile pkgs/Makefile.port pkgs/pwol.rb pkgs/pkginfo pkgs/pwol.spec pkgs/pkg-descr pkgs/build.sh"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -4514,6 +4514,9 @@ do
     "pkgs/Makefile.port") CONFIG_FILES="$CONFIG_FILES pkgs/Makefile.port" ;;
     "pkgs/pwol.rb") CONFIG_FILES="$CONFIG_FILES pkgs/pwol.rb" ;;
     "pkgs/pkginfo") CONFIG_FILES="$CONFIG_FILES pkgs/pkginfo" ;;
+    "pkgs/pwol.spec") CONFIG_FILES="$CONFIG_FILES pkgs/pwol.spec" ;;
+    "pkgs/pkg-descr") CONFIG_FILES="$CONFIG_FILES pkgs/pkg-descr" ;;
+    "pkgs/build.sh") CONFIG_FILES="$CONFIG_FILES pkgs/build.sh" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac
