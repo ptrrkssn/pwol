@@ -81,13 +81,13 @@ pull:
 # Install targets
 install install-all: install-bin install-man install-conf
 
-install-strip: install-bin-strip install-man install-conf
+install-strip: install-strip-bin install-man install-conf
 
 install-bin: $(BINS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
 	$(INSTALL) $(BINS) $(DESTDIR)$(bindir)
 
-install-strip: $(BINS)
+install-strip-bin: $(BINS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
 	$(INSTALL) -s $(BINS) $(DESTDIR)$(bindir)
 
