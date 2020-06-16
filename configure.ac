@@ -15,8 +15,8 @@ AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 
 # Checks for libraries.
-AC_CHECK_LIB([socket], [connect])
-AC_CHECK_LIB([nsl], [gethostbyname])
+AC_SEARCH_LIBS([connect], [socket])
+dnl AC_SEARCH_LIBS([gethostbyname], [nsl])
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stdlib.h string.h sys/socket.h syslog.h unistd.h sys/ethernet.h net/ethernet.h netinet/ether.h])
