@@ -1,7 +1,7 @@
 /*
 ** pwol.c - Send Wake-On-LAN packets
 **
-** Copyright (c) 2017-2020 Peter Eriksson <pen@lysator.liu.se>
+** Copyright (c) 2017-2021 Peter Eriksson <pen@lysator.liu.se>
 ** All rights reserved.
 ** 
 ** Redistribution and use in source and binary forms, with or without
@@ -1831,17 +1831,17 @@ main(int argc,
 	puts("  -f <path>    Configuration file");
 	puts("");
 	puts("  -g <name>    Destination gateway");
-	puts("  -a <addr>    Destination address");
-	puts("  -p <port>    Destination port");
+	printf("  -a <addr>    Destination address [%s]\n", DEFAULT_ADDRESS);
+	printf("  -p <port>    Destination port [%s]\n", DEFAULT_PORT);
 	puts("  -t <time>    Inter-packet delay");
 	puts("  -T <time>    Inter-host delay");
-	puts("  -c <count>   Packet copies to send");
+	printf("  -c <count>   Packet copies to send [%s]\n", DEFAULT_COPIES);
 	puts("  -s <secret>  Force WoL secret");
 	puts("");
 	puts("  -D           Run as proxy daemon");
 	puts("  -F           Run proxy daemon in foreground");
-	puts("  -A <addr>    Proxy daemon listen address");
-	puts("  -P <port>    Proxy daemon listen port");
+	printf("  -A <addr>    Proxy daemon listen address [%s]\n", DEFAULT_PROXY_ADDRESS);
+	printf("  -P <port>    Proxy daemon listen port [%s]\n", DEFAULT_PROXY_PORT);
 	puts("  -S <secret>  Proxy daemon secret");
 	puts("");
 	puts("If no hosts/groups specified on the command line pwol will read them from stdin");
