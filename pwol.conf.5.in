@@ -33,6 +33,9 @@ Set the number of WoL packets to send per host
 .BI delay " time"
 Set the inter-packet delay.
 .TP
+.BI ttl " hops"
+Set the packet TTL.
+.TP
 .BI port " number"
 Set the destination UDP port to send WoL packets to.
 .TP
@@ -91,6 +94,7 @@ port 7
 gateway A 
  address 10.0.0.255
  port 1
+ ttl 3
 
 gateway B address b.wol.example.com
 gateway c.wol.example.com secret 1.2.3.4

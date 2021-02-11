@@ -66,6 +66,9 @@ Force (override) inter-host delay.
 .BI \-c " count"
 Force (override) packet copies for hosts/groups.
 .TP
+.BI \-H " hops"
+Force (override) packet TTL.
+.TP
 .BI \-s " secret"
 Force (override) WoL secret.
 .PP

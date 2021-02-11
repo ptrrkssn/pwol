@@ -1,4 +1,4 @@
-.TH "PWOL" "1" "14 Jun 2020" "1.5.3" "pwol man page"
+.TH "PWOL" "1" "14 Jun 2020" "1.5.4" "pwol man page"
 
 .SH "NAME"
 pwol \- Send Wake-On-LAN (WoL) packets to wake-up hosts over the network
@@ -65,6 +65,9 @@ Force (override) inter-host delay.
 .TP
 .BI \-c " count"
 Force (override) packet copies for hosts/groups.
+.TP
+.BI \-H " hops"
+Force (override) packet TTL.
 .TP
 .BI \-s " secret"
 Force (override) WoL secret.

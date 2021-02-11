@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([pwol], [1.5.3], [pen@lysator.liu.se], [pwol], [https://github.com/ptrrkssn/pwol])
+AC_INIT([pwol], [1.5.4], [pen@lysator.liu.se], [pwol], [https://github.com/ptrrkssn/pwol])
 
 AC_CONFIG_SRCDIR([pwol.c])
 AC_CONFIG_HEADERS([config.h])

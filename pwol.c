@@ -87,6 +87,7 @@
 #define DEFAULT_ADDRESS         "255.255.255.255"
 #define DEFAULT_PORT            "7"
 #define DEFAULT_COPIES          "1"
+#define DEFAULT_TTL             NULL
 #define DEFAULT_SECRET          NULL
 #define DEFAULT_DELAY           NULL
 
@@ -137,6 +138,7 @@ typedef struct gateway {
   unsigned int copies;
   struct timespec delay;
   SECRET secret;
+  unsigned int ttl;
 
   int fd;
 
@@ -156,6 +158,7 @@ typedef struct host {
   unsigned int copies;
   struct timespec delay;
   SECRET secret;
+  unsigned int ttl;
   
   struct host *next;
 } HOST;
@@ -190,6 +193,7 @@ int f_foreground = 0;
 char *f_copies  = NULL;
 char *f_delay   = NULL;
 char *f_secret  = NULL;
+char *f_ttl     = NULL;
 
 char *f_address = NULL;
 char *f_port    = NULL;
@@ -667,6 +671,15 @@ gw_add_copies(GATEWAY *gp,
 }
 
 int
+gw_add_ttl(GATEWAY *gp,
+           const char *ttl) {
+  if (ttl && sscanf(ttl, "%u", &gp->ttl) == 1)
+    return 0;
+
+  return -1;
+}
+
+int
 gw_add_secret(GATEWAY *gp,
 	      const char *secret) {
   if (!secret)
@@ -850,6 +863,15 @@ host_add_copies(HOST *hp,
 }
 
 int
+host_add_ttl(HOST *hp,
+             const char *ttl) {
+  if (!ttl || sscanf(ttl, "%u", &hp->ttl) != 1)
+    return -1;
+
+  return 0;
+}
+
+int
 host_add_secret(HOST *hp,
 		const char *secret) {
   if (!secret)
@@ -874,6 +896,8 @@ gw_print(GATEWAY *gp) {
       printf("  %-10s  %u\n", "Copies", gp->copies);
     if (gp->delay.tv_sec || gp->delay.tv_nsec)
       printf("  %-10s  %s\n", "Delay",  timespec2str(&gp->delay));
+    if (gp->ttl)
+      printf("  %-10s  %u\n", "TTL", gp->ttl);
     if (gp->secret.size > 0)
       printf("  %-10s  %s\n", "Secret", secret2str(&gp->secret));
     printf("  Targets:\n");
@@ -916,6 +940,8 @@ host_print(HOST *hp) {
       printf("  %-10s  %s\n", "Gateway", hp->via->name);
     if (hp->copies)
       printf("  %-10s  %u\n", "Copies", hp->copies);
+    if (hp->ttl)
+      printf("  %-10s  %u\n", "TTL", hp->ttl);
     if (hp->delay.tv_sec || hp->delay.tv_nsec)
       printf("  %-10s  %s\n", "Delay",  timespec2str(&hp->delay));
     if (hp->secret.size > 0)
@@ -1022,7 +1048,8 @@ send_wol_host(HOST *hp) {
   SECRET *sp = NULL;
   TARGET *tp = NULL;
   struct timespec delay;
-  int copies;
+  unsigned int copies;
+  unsigned int ttl;
 
 
   if (!hp)
@@ -1058,6 +1085,18 @@ send_wol_host(HOST *hp) {
     copies = hp->via->copies;
   if (!copies)
     copies = 1;
+
+  if (f_ttl) {
+    if (host_add_ttl(hp, f_ttl) < 0) {
+      errno = EINVAL;
+      return -1;
+    }
+  }
+  ttl = hp->ttl;
+  if (!ttl && hp->via)
+    ttl = hp->via->ttl;
+  if (!ttl)
+    ttl = 0;
 
   if (f_delay) {
     if (host_add_delay(hp, f_delay) < 0) {
@@ -1146,6 +1185,13 @@ send_wol_host(HOST *hp) {
       }
 
       if (!f_no) {
+        if (ttl) {
+          (void) setsockopt(tp->fd, IPPROTO_IP, IP_TTL,
+                            &ttl, sizeof(ttl));
+          (void) setsockopt(tp->fd, IPPROTO_IPV6, IPV6_UNICAST_HOPS,
+                            &ttl, sizeof(ttl));
+        }
+                     
 	while ((rc = sendto(tp->fd, msg, msg_size, 0, aip->ai_addr, aip->ai_addrlen)) < 0 && errno == EINTR)
 	  ;
 	
@@ -1365,6 +1411,13 @@ parse_config(const char *path) {
 	  rc = host_add_copies(hp, val);
 	else
 	  rc = gw_add_copies(gp, val);
+      }	else if (strcmp(key, "ttl") == 0) {
+	if (hgp && !hp)
+	  goto InvalidOpt;
+	if (hp)
+	  rc = host_add_ttl(hp, val);
+	else
+	  rc = gw_add_ttl(gp, val);
       } else if (strcmp(key, "secret") == 0) {
 	if (hgp && !hp)
 	  goto InvalidOpt;
@@ -1767,6 +1820,15 @@ main(int argc,
 	  f_copies = strdup(cp);
 	goto NextArg;
 		
+      case 'H':
+	cp = argv[i]+j+1;
+	if (!*cp && i+1 < argc) {
+	  cp = argv[++i];
+	}
+	if (cp)
+	  f_ttl = strdup(cp);
+	goto NextArg;
+		
       case 's':
 	cp = argv[i]+j+1;
 	if (!*cp && i+1 < argc) {
@@ -1833,9 +1895,10 @@ main(int argc,
 	puts("  -g <name>    Destination gateway");
 	printf("  -a <addr>    Destination address [%s]\n", DEFAULT_ADDRESS);
 	printf("  -p <port>    Destination port [%s]\n", DEFAULT_PORT);
-	puts("  -t <time>    Inter-packet delay");
-	puts("  -T <time>    Inter-host delay");
+	printf("  -t <time>    Inter-packet delay [%s]\n", DEFAULT_DELAY ? DEFAULT_DELAY : "none");
+	printf("  -T <time>    Inter-host delay [%s]\n", "none");
 	printf("  -c <count>   Packet copies to send [%s]\n", DEFAULT_COPIES);
+	printf("  -H <hops>    Packet hops/TTL [%s]\n", DEFAULT_TTL ? DEFAULT_TTL : "default");
 	puts("  -s <secret>  Force WoL secret");
 	puts("");
 	puts("  -D           Run as proxy daemon");
