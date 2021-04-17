@@ -3,11 +3,13 @@ Peter's Wake-On-LAN utility
 Author:   Peter Eriksson <pen@lysator.liu.se>
 Website:  https://github.com/ptrrkssn/pwol
 
-pwol is a command line utility to send Wake-On-LAN (WoL) packets to one or many hosts, either 
-locally or via routers, in order to wake them up from sleep mode. 
+pwol is a command line utility to send Wake-On-LAN (WoL) packets to one
+or many hosts, either locally or via routers, in order to wake them up
+from sleep mode. 
 
-It can also be used as a WoL proxy daemon listening to incoming WoL packets (possibly authenticated) 
-and then forwarding requests to one or many other targets.
+It can also be used as a WoL proxy daemon listening to incoming WoL
+packets (possibly authenticated) and then forwarding requests to one
+or many other targets.
 
 
 LICENSE 
@@ -17,7 +19,12 @@ BSD standard license. See the file LICENSE for details.
 
 BUILD INSTRUCTIONS
 
-Edit 'Makefile' and run 'make'. Build has been tested on Solaris 10, OmniOS, Linux (CentOS 6) and FreeBSD 11.
+Run "./configure" and then run 'make'. Build has been tested on:
+- Linux (Ubuntu 20.04)
+- FreeBSD (12.2 & 13.0).
+- MacOS (10.15 & 11.2)
+- Solaris 10
+- OmniOS (r151036)
 
 
 USAGE
